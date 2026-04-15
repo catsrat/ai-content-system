@@ -75,11 +75,26 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
 
     # 1. Fetch news
     logger.info("Fetching latest AI news...")
-    articles = fetch_all_news(news_api_key=cfg.news_api_key)
-    if not articles:
+    all_articles = fetch_all_news(news_api_key=cfg.news_api_key)
+    if not all_articles:
         logger.warning("No articles found. Skipping this run.")
         return
-    logger.info(f"Fetched {len(articles)} articles")
+
+    # Filter out already-seen articles using Redis
+    try:
+        from utils.redis_store import is_article_seen, mark_article_seen
+        articles = [a for a in all_articles if not is_article_seen(a["title"].lower()[:80])]
+        if not articles:
+            logger.warning("All articles already posted. Using all articles as fallback.")
+            articles = all_articles
+        else:
+            logger.info(f"Fetched {len(all_articles)} articles, {len(articles)} are new")
+        # Mark the top articles as seen
+        for a in articles[:3]:
+            mark_article_seen(a["title"].lower()[:80])
+    except Exception:
+        articles = all_articles
+        logger.info(f"Fetched {len(articles)} articles")
 
     # 2. Write content with Claude
     logger.info("Generating content with Claude...")
