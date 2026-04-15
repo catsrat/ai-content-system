@@ -16,6 +16,7 @@ from datetime import datetime
 from utils.logger import get_logger
 
 POSTED_LOG = os.path.join(os.path.dirname(__file__), "..", "logs", "posted_topics.json")
+STRATEGY_FILE = os.path.join(os.path.dirname(__file__), "..", "logs", "content_strategy.json")
 
 
 def _load_posted_topics() -> list[str]:
@@ -101,17 +102,46 @@ class GeneratedPost:
     key_message: str        # 1-line summary for image headline
 
 
+def _load_strategy() -> dict:
+    """Load analyst-optimized content strategy if available."""
+    if os.path.exists(STRATEGY_FILE):
+        try:
+            with open(STRATEGY_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
 class ContentWriter:
     def __init__(self, api_key: str, brand_name: str, brand_niche: str, brand_tone: str):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.brand_name = brand_name
         self.brand_niche = brand_niche
         self.brand_tone = brand_tone
+
+        # Load analyst strategy and inject into system prompt
+        strategy = _load_strategy()
+        strategy_notes = ""
+        if strategy:
+            strategy_notes = f"""
+PERFORMANCE-OPTIMIZED STRATEGY (learned from engagement data):
+- Top performing topics: {', '.join(strategy.get('top_topics', []))}
+- Best hooks: {', '.join(strategy.get('best_hooks', []))}
+- Avoid: {', '.join(strategy.get('avoid_topics', []))}
+- Best post type: {strategy.get('best_post_type', '')}
+- Tone notes: {strategy.get('tone_notes', '')}
+- Hashtag notes: {strategy.get('hashtag_notes', '')}
+
+Apply these learnings to maximize engagement.
+"""
+            logger.info("Content strategy loaded from Analyst Agent.")
+
         self.system = SYSTEM_PROMPT.format(
             brand_name=brand_name,
             brand_niche=brand_niche,
             brand_tone=brand_tone,
-        )
+        ) + strategy_notes
 
     def _call_claude(self, prompt: str) -> str:
         """Call Claude with streaming and return full text response."""

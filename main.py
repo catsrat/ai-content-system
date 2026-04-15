@@ -24,11 +24,12 @@ from config import load_config
 from agents.news_fetcher import fetch_all_news
 from agents.content_writer import ContentWriter, GeneratedPost
 from agents.image_generator import generate_post_image
+from agents.analyst_agent import run_analyst
 from utils.cloudinary_uploader import init_cloudinary, upload_image
 from publishers.twitter import TwitterPublisher
 from publishers.linkedin import LinkedInPublisher
 from publishers.instagram import InstagramPublisher
-from scheduler.scheduler import build_scheduler, build_news_triggered_scheduler
+from scheduler.scheduler import build_news_triggered_scheduler
 from utils.logger import get_logger
 
 logger = get_logger("main")
@@ -265,11 +266,25 @@ def main():
         logger.info(f"Starting news-triggered scheduler (timezone: {args.timezone})")
         logger.info("Checking for new AI news every 30 minutes. Max 5 posts/day.")
 
+        from apscheduler.triggers.interval import IntervalTrigger
+        import pytz
+
         scheduler = build_news_triggered_scheduler(
             fetch_func=lambda: fetch_all_news(news_api_key=cfg.news_api_key),
             run_func=lambda pt: run_post(pt, cfg),
             timezone=args.timezone,
         )
+
+        # Add Analyst Agent — runs every 24 hours
+        tz = pytz.timezone(args.timezone)
+        scheduler.add_job(
+            func=lambda: run_analyst(cfg),
+            trigger=IntervalTrigger(hours=24, timezone=tz),
+            id="analyst",
+            name="Analyst Agent",
+            replace_existing=True,
+        )
+        logger.info("Analyst Agent scheduled — runs every 24 hours.")
 
         try:
             logger.info("Scheduler running. Press Ctrl+C to stop.")
