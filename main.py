@@ -24,6 +24,7 @@ from config import load_config
 from agents.news_fetcher import fetch_all_news
 from agents.content_writer import ContentWriter, GeneratedPost
 from agents.image_generator import generate_post_image
+from agents.reels_generator import generate_reel
 from agents.analyst_agent import run_analyst
 from utils.cloudinary_uploader import init_cloudinary, upload_image
 from publishers.twitter import TwitterPublisher
@@ -149,6 +150,25 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
         logger.info(f"Image saved: {local_image_path}")
     except Exception as e:
         logger.warning(f"Image generation failed: {e}. Posting without image.")
+
+    # 3b. Generate Reel
+    local_reel_path = None
+    if post.reel_script and cfg.elevenlabs_api_key:
+        logger.info("Generating Reel with voiceover...")
+        try:
+            reel_filename = f"{post_type}_{timestamp}.mp4"
+            local_reel_path = generate_reel(
+                post_type=post.post_type,
+                headline=post.key_message,
+                script=post.reel_script,
+                brand_name=cfg.brand_name,
+                filename=reel_filename,
+                background_image_url=bg_url,
+                elevenlabs_api_key=cfg.elevenlabs_api_key,
+            )
+            logger.info(f"Reel saved: {local_reel_path}")
+        except Exception as e:
+            logger.warning(f"Reel generation failed: {e}")
 
     # 4. Upload to Cloudinary (needed for Instagram)
     if local_image_path:

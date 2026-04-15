@@ -44,6 +44,9 @@ class Config:
     instagram_access_token: str
     instagram_business_account_id: str
 
+    # ElevenLabs
+    elevenlabs_api_key: str
+
     # Brand
     brand_name: str
     brand_niche: str
@@ -85,6 +88,7 @@ def load_config() -> Config:
         linkedin_organization_id=optional("LINKEDIN_ORGANIZATION_ID"),
         instagram_access_token=optional("INSTAGRAM_ACCESS_TOKEN"),
         instagram_business_account_id=optional("INSTAGRAM_BUSINESS_ACCOUNT_ID"),
+        elevenlabs_api_key=optional("ELEVENLABS_API_KEY"),
 
         brand_name=os.getenv("BRAND_NAME", "AI Career Hub"),
         brand_niche=os.getenv("BRAND_NICHE", "AI Career & Tools"),
