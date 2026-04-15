@@ -110,7 +110,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
             logger.info("No new articles since last check. Skipping.")
             return
 
-        # Mark as seen
+        # Mark as seen BEFORE posting to prevent duplicates on crash/redeploy
         _save_seen_article(new_article["title"].lower()[:80])
 
         post_type = _get_next_post_type()

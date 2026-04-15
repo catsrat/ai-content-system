@@ -37,21 +37,32 @@ HIGHLIGHT_TRIGGERS = [
 ]
 
 
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
+
+
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    bold_paths = [
+    # Bundled fonts (work on all platforms including Railway/Linux)
+    bundled_paths = [
+        os.path.join(ASSETS_DIR, "Montserrat-Bold.ttf" if bold else "Montserrat-Regular.ttf"),
+    ]
+    # System font fallbacks
+    system_paths_bold = [
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         "/System/Library/Fonts/Supplemental/Impact.ttf",
         "/Library/Fonts/Arial Bold.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     ]
-    regular_paths = [
+    system_paths_regular = [
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/Library/Fonts/Arial.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
-    for path in (bold_paths if bold else regular_paths):
+    all_paths = bundled_paths + (system_paths_bold if bold else system_paths_regular)
+    for path in all_paths:
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
