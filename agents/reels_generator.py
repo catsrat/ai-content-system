@@ -11,16 +11,13 @@ Format:
 
 import os
 import io
-import re
-import textwrap
 import requests
-import tempfile
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from elevenlabs.client import ElevenLabs
 from moviepy import (
-    ImageClip, AudioFileClip, CompositeVideoClip,
-    concatenate_videoclips, ColorClip
+    ImageClip, AudioFileClip,
+    concatenate_videoclips,
 )
 from utils.logger import get_logger
 
@@ -260,6 +257,20 @@ def generate_reel(
     if elevenlabs_api_key:
         has_audio = generate_voiceover(script, elevenlabs_api_key, audio_path)
 
+    # Generate unique background music
+    import random
+    import time
+    from utils.music_generator import generate_background_music
+    music_seed = int(time.time()) % 999999
+    music_duration = 30.0  # Generate 30s, will be trimmed to video length
+    music_path = output_path.replace(".mp4", "_music.wav")
+    try:
+        generate_background_music(post_type, music_duration, music_path, seed=music_seed)
+        has_music = True
+    except Exception as e:
+        logger.warning(f"Music generation failed: {e}")
+        has_music = False
+
     # Build video clips
     # Each line appears one at a time, then full text holds
     clips = []
@@ -301,13 +312,39 @@ def generate_reel(
     # Concatenate all clips
     video = concatenate_videoclips(clips, method="compose")
 
-    # Add audio
-    if has_audio:
-        try:
-            audio_clip = AudioFileClip(audio_path)
-            video = video.with_audio(audio_clip)
-        except Exception as e:
-            logger.warning(f"Audio attachment failed: {e}")
+    # Mix voiceover + background music
+    try:
+        from moviepy import CompositeAudioClip
+        audio_clips = []
+
+        if has_audio:
+            voiceover = AudioFileClip(audio_path).with_effects(
+                [lambda c: c.with_volume_scaled(1.0)]
+            )
+            audio_clips.append(voiceover)
+
+        if has_music and os.path.exists(music_path):
+            music = AudioFileClip(music_path)
+            # Trim music to video duration
+            music = music.subclipped(0, min(music.duration, video.duration))
+            # Lower music volume (20% so voiceover is clear)
+            music = music.with_effects(
+                [lambda c: c.with_volume_scaled(0.20)]
+            )
+            audio_clips.append(music)
+
+        if audio_clips:
+            mixed = CompositeAudioClip(audio_clips)
+            video = video.with_audio(mixed)
+
+    except Exception as e:
+        logger.warning(f"Audio mixing failed: {e}")
+        # Fallback: just add voiceover without music
+        if has_audio:
+            try:
+                video = video.with_audio(AudioFileClip(audio_path))
+            except Exception:
+                pass
 
     # Export
     video.write_videofile(
@@ -318,9 +355,10 @@ def generate_reel(
         logger=None,
     )
 
-    # Cleanup temp audio
-    if has_audio and os.path.exists(audio_path):
-        os.remove(audio_path)
+    # Cleanup temp files
+    for path in [audio_path, music_path]:
+        if os.path.exists(path):
+            os.remove(path)
 
     logger.info(f"Reel saved: {output_path}")
     return output_path
