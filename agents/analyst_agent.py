@@ -30,20 +30,26 @@ DEFAULT_STRATEGY = {
 
 
 def load_strategy() -> dict:
-    """Load current content strategy. Returns default if none exists."""
-    if os.path.exists(STRATEGY_FILE):
-        try:
-            with open(STRATEGY_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
+    """Load current content strategy from Redis. Returns default if none exists."""
+    try:
+        from utils.redis_store import get_strategy
+        strategy = get_strategy()
+        if strategy:
+            return strategy
+    except Exception:
+        pass
     return DEFAULT_STRATEGY.copy()
 
 
 def save_strategy(strategy: dict):
     strategy["last_updated"] = datetime.now().isoformat()
-    with open(STRATEGY_FILE, "w") as f:
-        json.dump(strategy, f, indent=2)
+    try:
+        from utils.redis_store import save_strategy as redis_save
+        redis_save(strategy)
+    except Exception:
+        # Fallback to local file
+        with open(STRATEGY_FILE, "w") as f:
+            json.dump(strategy, f, indent=2)
     logger.info("Content strategy updated.")
 
 

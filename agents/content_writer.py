@@ -15,29 +15,25 @@ from dataclasses import dataclass
 from datetime import datetime
 from utils.logger import get_logger
 
-POSTED_LOG = os.path.join(os.path.dirname(__file__), "..", "logs", "posted_topics.json")
 STRATEGY_FILE = os.path.join(os.path.dirname(__file__), "..", "logs", "content_strategy.json")
 
 
 def _load_posted_topics() -> list[str]:
     """Load list of already-posted topics to avoid duplicates."""
-    if os.path.exists(POSTED_LOG):
-        try:
-            with open(POSTED_LOG) as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    try:
+        from utils.redis_store import get_posted_topics
+        return get_posted_topics()
+    except Exception:
+        return []
 
 
 def _save_posted_topic(topic: str):
-    """Save a posted topic. Keeps last 50 to avoid repeating."""
-    topics = _load_posted_topics()
-    topics.append(topic.lower())
-    topics = topics[-50:]  # keep last 50
-    os.makedirs(os.path.dirname(POSTED_LOG), exist_ok=True)
-    with open(POSTED_LOG, "w") as f:
-        json.dump(topics, f, indent=2)
+    """Save a posted topic to Redis."""
+    try:
+        from utils.redis_store import save_posted_topic
+        save_posted_topic(topic)
+    except Exception:
+        pass
 
 logger = get_logger("content_writer")
 
