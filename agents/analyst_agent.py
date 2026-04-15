@@ -300,3 +300,21 @@ def run_analyst(cfg) -> None:
     save_strategy(new_strategy)
 
     logger.info(f"Analyst Agent complete. Summary: {new_strategy.get('analysis_summary', 'N/A')}")
+
+    # Send daily email report
+    if cfg.gmail_user and cfg.gmail_app_password and cfg.report_email:
+        try:
+            from utils.email_reporter import send_daily_report
+            from utils.redis_store import get_today_count
+            posts_today = get_today_count()
+            latest_metrics = {"twitter": twitter_metrics, "instagram": instagram_metrics}
+            send_daily_report(
+                gmail_user=cfg.gmail_user,
+                gmail_app_password=cfg.gmail_app_password,
+                to_email=cfg.report_email,
+                metrics=latest_metrics,
+                strategy=new_strategy,
+                posts_today=posts_today,
+            )
+        except Exception as e:
+            logger.warning(f"Email report failed: {e}")

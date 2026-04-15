@@ -47,6 +47,11 @@ class Config:
     # ElevenLabs
     elevenlabs_api_key: str
 
+    # Email reporting
+    gmail_user: str
+    gmail_app_password: str
+    report_email: str
+
     # Brand
     brand_name: str
     brand_niche: str
@@ -89,6 +94,9 @@ def load_config() -> Config:
         instagram_access_token=optional("INSTAGRAM_ACCESS_TOKEN"),
         instagram_business_account_id=optional("INSTAGRAM_BUSINESS_ACCOUNT_ID"),
         elevenlabs_api_key=optional("ELEVENLABS_API_KEY"),
+        gmail_user=optional("GMAIL_USER"),
+        gmail_app_password=optional("GMAIL_APP_PASSWORD"),
+        report_email=optional("REPORT_EMAIL"),
 
         brand_name=os.getenv("BRAND_NAME", "AI Career Hub"),
         brand_niche=os.getenv("BRAND_NICHE", "AI Career & Tools"),
