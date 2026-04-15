@@ -106,9 +106,11 @@ def _draw_gradient_overlay(draw: ImageDraw, W: int, H: int):
         draw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
 
 
-def _wrap_headline(headline: str, max_chars_per_line: int = 18) -> list[str]:
-    """Wrap headline into lines, keeping important words together."""
-    words = headline.split()
+def _wrap_headline(headline: str, max_chars_per_line: int = 12) -> list[str]:
+    """Wrap headline into lines, keeping important words together.
+    Truncates to max 4 words per line, max 3 lines for big bold text."""
+    # Trim headline to max 8 words for impact
+    words = headline.split()[:8]
     lines = []
     current = ""
     for word in words:
@@ -121,7 +123,7 @@ def _wrap_headline(headline: str, max_chars_per_line: int = 18) -> list[str]:
             current = word
     if current:
         lines.append(current)
-    return lines[:5]
+    return lines[:3]
 
 
 def _draw_highlighted_text(draw, lines, start_y, line_h, font_size, highlight_color, W):
@@ -197,10 +199,10 @@ def generate_post_image(
     draw.text((56, 51), badge_text, font=badge_font, fill=(255, 255, 255))
 
     # ── 4. Headline text (center of image) ─────────────────
-    lines = _wrap_headline(headline, max_chars_per_line=17)
+    lines = _wrap_headline(headline, max_chars_per_line=12)
     n = len(lines)
-    font_size = 104 if n <= 2 else (88 if n == 3 else 74)
-    line_h = font_size + 18
+    font_size = 130 if n == 1 else (110 if n == 2 else 90)
+    line_h = font_size + 24
     total_h = n * line_h
     start_y = (H - total_h) // 2 - 40
 

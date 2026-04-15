@@ -157,7 +157,7 @@ Must be the most career-relevant story not yet covered.
 Return ONLY this JSON (no markdown, no extra text):
 {{
   "topic": "one-line topic name",
-  "key_message": "one punchy headline for the image (max 8 words)",
+  "key_message": "one punchy headline for the image (max 5 words, ALL CAPS, punchy)",
   "image_prompt": "describe a simple branded image for this post (no text in image, just visual concept)",
   "twitter_text": "tweet version (max 280 chars, strong hook first line)",
   "linkedin_text": "linkedin version (professional, line breaks, 150-300 words)",
@@ -197,7 +197,7 @@ Pick a skill from the news context that helps people in their careers.
 Return ONLY this JSON (no markdown, no extra text):
 {{
   "topic": "skill name",
-  "key_message": "Learn [X] in 60 seconds (max 8 words for image)",
+  "key_message": "Learn [X] in 60 seconds (max 5 words, ALL CAPS, punchy)",
   "image_prompt": "describe a clean visual concept for a learning post image (no text overlay needed)",
   "twitter_text": "tweet thread version: tweet 1/3 hook + 2/3 concept + 3/3 action (max 280 chars each, format as thread)",
   "linkedin_text": "linkedin version with hook, concept explanation, real use case, action step (150-250 words)",
@@ -241,7 +241,7 @@ The post must be controversial enough to generate comments but factually grounde
 Return ONLY this JSON (no markdown, no extra text):
 {{
   "topic": "the bold take in 5 words",
-  "key_message": "the controversial hook (max 8 words for image)",
+  "key_message": "the controversial hook (max 5 words, ALL CAPS, punchy)",
   "image_prompt": "bold visual concept for this opinion post (no text needed, just the mood/concept)",
   "twitter_text": "tweet version — bold hook first line, max 280 chars, ends with question to spark debate",
   "linkedin_text": "linkedin version — bold opener, build the argument, career impact, end with question (150-300 words)",
