@@ -83,7 +83,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
 
     scheduler.add_job(
         func=check_and_post,
-        trigger=IntervalTrigger(minutes=30, timezone=tz),
+        trigger=IntervalTrigger(minutes=10, timezone=tz),
         id="news_watcher",
         name="News Watcher",
         replace_existing=True,
