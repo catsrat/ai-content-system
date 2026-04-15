@@ -98,11 +98,10 @@ def _make_background(img: object, bg_color: tuple, size: tuple) -> Image.Image:
 
 
 def _draw_gradient_overlay(draw: ImageDraw, W: int, H: int):
-    """Draw dark gradient from bottom (strong) to top (light) for text readability."""
+    """Draw dark gradient overlay for text readability."""
     for y in range(H):
         t = y / H
-        # More opaque at bottom, lighter at top
-        alpha = int(30 + 180 * (t ** 1.5))
+        alpha = int(60 + 160 * (t ** 1.2))
         draw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
 
 
