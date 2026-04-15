@@ -65,9 +65,12 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     for path in all_paths:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size)
+                font = ImageFont.truetype(path, size)
+                logger.info(f"Using font: {path} size={size}")
+                return font
             except Exception:
                 continue
+    logger.warning(f"No font found — using default (text will be tiny!)")
     return ImageFont.load_default()
 
 
