@@ -28,7 +28,7 @@ from utils.cloudinary_uploader import init_cloudinary, upload_image
 from publishers.twitter import TwitterPublisher
 from publishers.linkedin import LinkedInPublisher
 from publishers.instagram import InstagramPublisher
-from scheduler.scheduler import build_scheduler
+from scheduler.scheduler import build_scheduler, build_news_triggered_scheduler
 from utils.logger import get_logger
 
 logger = get_logger("main")
@@ -261,11 +261,12 @@ def main():
         for pt in post_types:
             run_post(pt, cfg, dry_run=args.dry_run)
     else:
-        # Start the scheduler
-        logger.info(f"Starting scheduler (timezone: {args.timezone})")
-        logger.info("Schedule: 08:00 Daily Brief | 12:00 Learning | 18:00 Differentiator")
+        # Start the news-triggered scheduler
+        logger.info(f"Starting news-triggered scheduler (timezone: {args.timezone})")
+        logger.info("Checking for new AI news every 30 minutes. Max 5 posts/day.")
 
-        scheduler = build_scheduler(
+        scheduler = build_news_triggered_scheduler(
+            fetch_func=lambda: fetch_all_news(news_api_key=cfg.news_api_key),
             run_func=lambda pt: run_post(pt, cfg),
             timezone=args.timezone,
         )
