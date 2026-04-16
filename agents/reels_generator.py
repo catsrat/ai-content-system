@@ -28,7 +28,7 @@ ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
 
 W, H = 1080, 1920  # 9:16 vertical
 FPS = 15
-FADE_FRAMES = 8   # 0.53s fade-in for each new text line
+FADE_FRAMES = 12  # 0.8s fade-in for each new text line
 
 THEME_COLORS = {
     "daily_brief":    {"highlight": (0, 180, 255),  "badge": "AI NEWS",    "bg": (5, 10, 30)},
@@ -164,8 +164,8 @@ def _render_frame(
         is_newest = (i == len(text_lines_visible) - 1)
         line_alpha = newest_line_alpha if is_newest else 1.0
 
-        # Slide-up offset for newest line (fades in from 20px below)
-        slide_offset = int(20 * (1.0 - line_alpha)) if is_newest else 0
+        # Slide-up offset for newest line (fades in from 60px below)
+        slide_offset = int(60 * (1.0 - line_alpha)) if is_newest else 0
 
         words = line.split()
         full_text = " ".join(words)
@@ -269,8 +269,8 @@ def _make_animated_clip(
     for i in range(n_frames):
         global_t = min((time_start + i / FPS) / max(total_duration, 1), 1.0)
 
-        # Ken Burns: background slowly zooms 1.0 → 1.07 across full reel
-        zoom = 1.0 + 0.07 * _ease_in_out(global_t)
+        # Ken Burns: background zooms 1.0 → 1.18 across full reel (clearly visible)
+        zoom = 1.0 + 0.18 * _ease_in_out(global_t)
 
         # Progress bar
         prog = global_t
