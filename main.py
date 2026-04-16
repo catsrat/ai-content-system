@@ -246,7 +246,7 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
 
     # — Instagram —
     if cfg.instagram_access_token and cfg.instagram_business_account_id:
-        caption = post.instagram_caption + post.instagram_hashtags
+        caption = (post.instagram_caption + post.instagram_hashtags)[:2200]
         instagram = InstagramPublisher(
             access_token=cfg.instagram_access_token,
             business_account_id=cfg.instagram_business_account_id,
