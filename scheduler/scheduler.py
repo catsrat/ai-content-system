@@ -22,7 +22,7 @@ from utils.redis_store import (
 
 logger = get_logger("scheduler")
 
-MAX_POSTS_PER_DAY = 10
+MAX_POSTS_PER_DAY = 15
 POST_TYPE_ROTATION = ["daily_brief", "workflow", "learning", "differentiator", "workflow"]
 
 
