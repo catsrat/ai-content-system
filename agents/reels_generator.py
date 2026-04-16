@@ -132,11 +132,13 @@ def _render_frame(
     bh = 68
     bx = (W - bw) // 2
     by = 110
-    r = 34
+    r = min(34, bw // 2, bh // 2)  # guard: r must not exceed half the pill size
     hc = highlight_color
     # Rounded pill background
-    draw.rectangle([bx + r, by, bx + bw - r, by + bh], fill=(*hc, 230))
-    draw.rectangle([bx, by + r, bx + bw, by + bh - r], fill=(*hc, 230))
+    if bx + r < bx + bw - r:
+        draw.rectangle([bx + r, by, bx + bw - r, by + bh], fill=(*hc, 230))
+    if by + r < by + bh - r:
+        draw.rectangle([bx, by + r, bx + bw, by + bh - r], fill=(*hc, 230))
     draw.ellipse([bx, by, bx + r*2, by + r*2], fill=(*hc, 230))
     draw.ellipse([bx + bw - r*2, by, bx + bw, by + r*2], fill=(*hc, 230))
     draw.ellipse([bx, by + bh - r*2, bx + r*2, by + bh], fill=(*hc, 230))
@@ -197,10 +199,11 @@ def _render_frame(
     if text_lines_visible:
         last_y = start_y + (len(text_lines_visible) - 1) * line_h + font_size + 20
         bar_w = int(200 * newest_line_alpha)
-        draw.rectangle(
-            [(W - bar_w) // 2, last_y, (W + bar_w) // 2, last_y + 5],
-            fill=(*highlight_color, int(220 * newest_line_alpha))
-        )
+        if bar_w > 1:
+            draw.rectangle(
+                [(W - bar_w) // 2, last_y, (W + bar_w) // 2, last_y + 5],
+                fill=(*highlight_color, int(220 * newest_line_alpha))
+            )
 
     # ── Progress bar at bottom ───────────────────────────────────
     bar_y = H - 140
