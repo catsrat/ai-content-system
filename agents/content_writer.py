@@ -142,27 +142,30 @@ Apply these learnings to maximize engagement.
         ) + strategy_notes
 
     def _call_claude(self, prompt: str) -> str:
-        """Call Claude with streaming and return full text response."""
-        full_text = ""
+        """Call Claude and return full text response."""
         with self.client.messages.stream(
             model="claude-opus-4-6",
             max_tokens=4096,
-            thinking={"type": "adaptive"},
             system=self.system,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
-            for text in stream.text_stream:
-                full_text += text
-        return full_text.strip()
+            text = stream.get_final_text().strip()
+        if not text:
+            raise ValueError("Claude returned an empty response")
+        return text
 
     def _parse_json(self, raw: str) -> dict:
         """Extract and parse JSON from Claude's response."""
+        if not raw:
+            raise ValueError("Empty response from Claude")
         # Strip markdown code fences if present
         if "```json" in raw:
             raw = raw.split("```json")[1].split("```")[0]
         elif "```" in raw:
             raw = raw.split("```")[1].split("```")[0]
-        return json.loads(raw.strip())
+        raw = raw.strip()
+        logger.debug(f"Parsing JSON ({len(raw)} chars): {raw[:100]}...")
+        return json.loads(raw)
 
     def write_daily_brief(self, articles: list[dict]) -> GeneratedPost:
         """Generate the AI Daily Brief post from today's top news."""
