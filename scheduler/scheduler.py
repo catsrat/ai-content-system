@@ -18,28 +18,21 @@ from utils.logger import get_logger
 from utils.redis_store import (
     is_article_seen, mark_article_seen,
     get_today_count, increment_today_count,
+    get_last_post_time, set_last_post_time,
 )
 
 logger = get_logger("scheduler")
 
 MAX_POSTS_PER_DAY = 30
 POST_TYPE_ROTATION = ["daily_brief", "workflow", "learning", "differentiator", "workflow"]
-MIN_MINUTES_BETWEEN_POSTS = 30  # minimum gap between any two posts
-
-_last_post_time: datetime | None = None
+MIN_MINUTES_BETWEEN_POSTS = 30
 
 
 def _can_post_now() -> bool:
-    """Returns True if enough time has passed since the last post."""
-    global _last_post_time
-    if _last_post_time is None:
+    last = get_last_post_time()
+    if last is None:
         return True
-    return datetime.now() >= _last_post_time + timedelta(minutes=MIN_MINUTES_BETWEEN_POSTS)
-
-
-def _record_post_time():
-    global _last_post_time
-    _last_post_time = datetime.now()
+    return datetime.now() >= last + timedelta(minutes=MIN_MINUTES_BETWEEN_POSTS)
 
 
 def _get_next_post_type() -> str:
@@ -95,7 +88,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
         try:
             run_func(post_type)
             increment_today_count()
-            _record_post_time()
+            set_last_post_time()
             logger.info(f"Posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
         except Exception as e:
             logger.error(f"Post failed: {e}")
@@ -112,7 +105,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
         try:
             run_func("workflow")
             increment_today_count()
-            _record_post_time()
+            set_last_post_time()
             logger.info(f"Workflow posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
         except Exception as e:
             logger.error(f"Workflow post failed: {e}")

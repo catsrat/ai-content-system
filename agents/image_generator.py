@@ -12,7 +12,7 @@ Style: uncover.ai inspired
 import os
 import io
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from utils.logger import get_logger
 
 logger = get_logger("image_generator")
@@ -115,7 +115,7 @@ def _download_image(url: str) -> Image.Image | None:
         return None
 
 
-def _prepare_background(img: Image.Image | None, theme_color: tuple) -> Image.Image:
+def _prepare_background(img: Image.Image | None) -> Image.Image:
     """Crop photo to canvas size with dark overlay, or use gradient fallback."""
     if img:
         # Center crop to canvas
@@ -136,7 +136,7 @@ def _prepare_background(img: Image.Image | None, theme_color: tuple) -> Image.Im
         return bg
 
 
-def _draw_gradient(overlay_draw: ImageDraw, slide_idx: int):
+def _draw_gradient(overlay_draw: ImageDraw):
     """Draw gradient overlay — heavier at bottom for text area."""
     for y in range(H):
         t = y / H
@@ -207,29 +207,20 @@ def _render_slide(
     base = bg.copy().convert("RGBA")
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ov_draw = ImageDraw.Draw(overlay)
-    _draw_gradient(ov_draw, slide_idx)
+    _draw_gradient(ov_draw)
     base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
 
     PADDING = 60
     max_text_w = W - PADDING * 2
 
-    # ── Top bar: badge (left) + slide counter (right) ──────
+    # ── Top bar: badge only ─────────────────────────────────
     badge_font = _get_font(26, bold=True)
     badge_full = f"{emoji} {badge_text}"
     bb = draw.textbbox((0, 0), badge_full, font=badge_font)
     bw, bh = bb[2] - bb[0] + 32, bb[3] - bb[1] + 16
     _draw_rounded_rect(draw, PADDING, 50, PADDING + bw, 50 + bh, 10, (*highlight, 220))
     draw.text((PADDING + 16, 58), badge_full, font=badge_font, fill=(255, 255, 255))
-
-    # Slide counter pill (top right)
-    counter_font = _get_font(24, bold=True)
-    counter_text = f"{slide_idx + 1} / {total_slides}"
-    cb = draw.textbbox((0, 0), counter_text, font=counter_font)
-    cw = cb[2] - cb[0] + 28
-    cx = W - PADDING - cw
-    _draw_rounded_rect(draw, cx, 50, cx + cw, 50 + bh, 10, (255, 255, 255, 40))
-    draw.text((cx + 14, 58), counter_text, font=counter_font, fill=(255, 255, 255, 200))
 
     # ── Main text (lower 40% of image) ─────────────────────
     text_zone_top = int(H * 0.52)
@@ -262,20 +253,22 @@ def _render_slide(
     line_y = text_y + total_text_h + 20
     draw.rectangle([(W - 80) // 2, line_y, (W + 80) // 2, line_y + 4], fill=(*highlight, 200))
 
-    # CTA slide: swipe arrow hint
+    # Swipe hint / CTA below accent line
+    hint_font = _get_font(28, bold=False)
     if is_cta:
-        cta_font = _get_font(30, bold=True)
-        follow_text = f"Follow @{brand_name} for daily AI updates"
-        fb = draw.textbbox((0, 0), follow_text, font=cta_font)
-        fw = fb[2] - fb[0]
-        draw.text(((W - fw) // 2, line_y + 30), follow_text, font=cta_font, fill=(*highlight, 220))
+        hint_text = f"Follow @{brand_name} for daily AI updates"
+        hint_color = (*highlight, 220)
     elif slide_idx < total_slides - 1:
-        # Swipe hint on non-last slides
-        swipe_font = _get_font(24, bold=False)
-        swipe_text = "swipe →"
-        sb = draw.textbbox((0, 0), swipe_text, font=swipe_font)
-        sw = sb[2] - sb[0]
-        draw.text(((W - sw) // 2, line_y + 30), swipe_text, font=swipe_font, fill=(255, 255, 255, 120))
+        hint_text = "swipe for more  →"
+        hint_color = (255, 255, 255, 140)
+    else:
+        hint_text = ""
+        hint_color = (255, 255, 255, 0)
+
+    if hint_text:
+        hb = draw.textbbox((0, 0), hint_text, font=hint_font)
+        hw = hb[2] - hb[0]
+        draw.text(((W - hw) // 2, line_y + 28), hint_text, font=hint_font, fill=hint_color)
 
     # ── Brand watermark (bottom) ────────────────────────────
     wm_font = _get_font(28, bold=True)
@@ -318,7 +311,7 @@ def generate_carousel_images(
     if photo is None and background_image_url:
         photo = _download_image(background_image_url)
 
-    bg = _prepare_background(photo, highlight)
+    bg = _prepare_background(photo)
 
     # Ensure we have exactly 4 slides
     texts = list(carousel_texts)

@@ -6,7 +6,7 @@ daily_count, and content_strategy. Survives Railway redeploys.
 
 import os
 import json
-from datetime import date
+from datetime import date, datetime
 from upstash_redis import Redis
 from utils.logger import get_logger
 
@@ -114,3 +114,22 @@ def save_strategy(strategy: dict):
         get_redis().set("content_strategy", json.dumps(strategy))
     except Exception as e:
         logger.warning(f"Redis save_strategy failed: {e}")
+
+
+# ─── Post Cooldown ────────────────────────────────────────
+
+def get_last_post_time() -> datetime | None:
+    try:
+        val = get_redis().get("last_post_time")
+        if val:
+            return datetime.fromisoformat(val)
+        return None
+    except Exception:
+        return None
+
+
+def set_last_post_time():
+    try:
+        get_redis().set("last_post_time", datetime.now().isoformat())
+    except Exception as e:
+        logger.warning(f"Redis set_last_post_time failed: {e}")

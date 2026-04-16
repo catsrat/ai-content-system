@@ -179,25 +179,8 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
         except Exception as e:
             logger.warning(f"Carousel generation failed: {e}")
 
-    # 3c. Generate Reel
+    # 3c. Reels disabled — using carousel instead
     local_reel_path = None
-    if post.reel_script:
-        logger.info("Generating Reel with voiceover...")
-        try:
-            reel_filename = f"{post_type}_{timestamp}.mp4"
-            local_reel_path = generate_reel(
-                post_type=post.post_type,
-                headline=post.key_message,
-                script=post.reel_script,
-                slides=post.reel_slides or [],
-                brand_name=cfg.brand_name,
-                filename=reel_filename,
-                background_image_url=bg_url,
-                elevenlabs_api_key=cfg.elevenlabs_api_key,
-            )
-            logger.info(f"Reel saved: {local_reel_path}")
-        except Exception as e:
-            logger.warning(f"Reel generation failed: {e}")
 
     # 4. Upload to Cloudinary
     public_reel_url = None
