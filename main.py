@@ -220,24 +220,37 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
     # 5. Publish to all platforms
     results = []
 
-    # — X / Twitter —
-    logger.info("Publishing to X (Twitter)...")
+    # — X / Twitter — (max 1500 posts/month)
+    TWITTER_MONTHLY_LIMIT = 1500
     try:
-        twitter = TwitterPublisher(
-            api_key=cfg.x_api_key,
-            api_secret=cfg.x_api_secret,
-            access_token=cfg.x_access_token,
-            access_token_secret=cfg.x_access_token_secret,
-        )
-        result = twitter.publish(
-            text=post.twitter_text,
-            image_path=local_image_path,
-        )
-        results.append(result)
-        logger.info(f"Twitter: {'OK' if result['success'] else 'FAILED'}")
-    except Exception as e:
-        logger.error(f"Twitter error: {e}")
-        results.append({"success": False, "platform": "twitter", "error": str(e)})
+        from utils.redis_store import get_monthly_twitter_count, increment_monthly_twitter_count
+        twitter_month_count = get_monthly_twitter_count()
+    except Exception:
+        twitter_month_count = 0
+
+    if twitter_month_count >= TWITTER_MONTHLY_LIMIT:
+        logger.info(f"Twitter monthly limit reached ({twitter_month_count}/1500). Skipping Twitter.")
+        results.append({"success": False, "platform": "twitter", "error": "monthly limit reached"})
+    else:
+        logger.info(f"Publishing to X (Twitter)... [{twitter_month_count + 1}/1500 this month]")
+        try:
+            twitter = TwitterPublisher(
+                api_key=cfg.x_api_key,
+                api_secret=cfg.x_api_secret,
+                access_token=cfg.x_access_token,
+                access_token_secret=cfg.x_access_token_secret,
+            )
+            result = twitter.publish(
+                text=post.twitter_text,
+                image_path=local_image_path,
+            )
+            results.append(result)
+            if result.get("success"):
+                increment_monthly_twitter_count()
+            logger.info(f"Twitter: {'OK' if result['success'] else 'FAILED'}")
+        except Exception as e:
+            logger.error(f"Twitter error: {e}")
+            results.append({"success": False, "platform": "twitter", "error": str(e)})
 
     # — LinkedIn —
     if cfg.linkedin_access_token and cfg.linkedin_organization_id:

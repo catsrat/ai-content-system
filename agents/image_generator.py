@@ -197,8 +197,6 @@ def _render_slide(
     total_slides: int,
     bg: Image.Image,
     highlight: tuple,
-    badge_text: str,
-    emoji: str,
     brand_name: str,
     is_cover: bool = False,
     is_cta: bool = False,
@@ -214,13 +212,11 @@ def _render_slide(
     PADDING = 60
     max_text_w = W - PADDING * 2
 
-    # ── Top bar: badge only ─────────────────────────────────
-    badge_font = _get_font(26, bold=True)
-    badge_full = f"{emoji} {badge_text}"
-    bb = draw.textbbox((0, 0), badge_full, font=badge_font)
-    bw, bh = bb[2] - bb[0] + 32, bb[3] - bb[1] + 16
-    _draw_rounded_rect(draw, PADDING, 50, PADDING + bw, 50 + bh, 10, (*highlight, 220))
-    draw.text((PADDING + 16, 58), badge_full, font=badge_font, fill=(255, 255, 255))
+    # ── Top bar: brand handle only (minimal) ───────────────
+    top_font = _get_font(26, bold=True)
+    top_text = f"@{brand_name}"
+    tb = draw.textbbox((0, 0), top_text, font=top_font)
+    draw.text((PADDING, 52), top_text, font=top_font, fill=(*highlight, 200))
 
     # ── Main text (lower 40% of image) ─────────────────────
     text_zone_top = int(H * 0.52)
@@ -330,8 +326,6 @@ def generate_carousel_images(
             total_slides=total,
             bg=bg,
             highlight=highlight,
-            badge_text=theme["badge"],
-            emoji=theme["emoji"],
             brand_name=brand_name,
             is_cover=is_cover,
             is_cta=is_cta,
@@ -379,8 +373,6 @@ def generate_post_image(
         total_slides=1,
         bg=bg,
         highlight=theme["highlight"],
-        badge_text=theme["badge"],
-        emoji=theme["emoji"],
         brand_name=brand_name,
         is_cover=True,
         is_cta=False,

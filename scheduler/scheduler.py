@@ -23,7 +23,7 @@ from utils.redis_store import (
 
 logger = get_logger("scheduler")
 
-MAX_POSTS_PER_DAY = 30
+MAX_POSTS_PER_DAY = 48  # one post every 30 min = 48/day max
 POST_TYPE_ROTATION = ["daily_brief", "workflow", "learning", "differentiator", "workflow"]
 MIN_MINUTES_BETWEEN_POSTS = 30
 

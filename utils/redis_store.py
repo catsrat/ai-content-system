@@ -133,3 +133,23 @@ def set_last_post_time():
         get_redis().set("last_post_time", datetime.now().isoformat())
     except Exception as e:
         logger.warning(f"Redis set_last_post_time failed: {e}")
+
+
+# ─── Twitter Monthly Counter ──────────────────────────────
+
+def get_monthly_twitter_count() -> int:
+    try:
+        key = f"twitter_monthly:{datetime.now().strftime('%Y-%m')}"
+        val = get_redis().get(key)
+        return int(val) if val else 0
+    except Exception:
+        return 0
+
+
+def increment_monthly_twitter_count():
+    try:
+        key = f"twitter_monthly:{datetime.now().strftime('%Y-%m')}"
+        get_redis().incr(key)
+        get_redis().expire(key, 86400 * 35)  # keep for 35 days
+    except Exception as e:
+        logger.warning(f"Redis twitter monthly count failed: {e}")
