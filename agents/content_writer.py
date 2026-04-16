@@ -198,7 +198,7 @@ Return ONLY this JSON (no markdown, no extra text):
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
   "reel_script": "15-20 second spoken script for a news anchor voiceover. Start with a hook, deliver the key fact, explain why it matters for careers. Conversational, no hashtags, no emojis. Max 60 words.",
   "reel_slides": ["hook line (max 4 words, ALL CAPS)", "key fact (max 5 words)", "why it matters (max 5 words)", "call to action (max 4 words)"],
-  "carousel_slides": ["Slide 1 hook — bold 1-line headline (max 10 words)", "Slide 2 — what happened, 1-2 sentences", "Slide 3 — why it matters for careers, 1-2 sentences", "Slide 4 — action step or save CTA, 1 sentence"]
+  "carousel_slides": ["bold catchy headline, max 10 words, NO label prefix", "what happened explained simply, 1-2 sentences, NO label prefix", "why this matters for your career, 1-2 sentences, NO label prefix", "one clear action step or save CTA, 1 sentence, NO label prefix"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -244,7 +244,7 @@ Return ONLY this JSON (no markdown, no extra text):
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
   "reel_script": "15-20 second spoken script teaching this skill. Start with a hook, explain concept in simple terms, give one action step. Conversational, no hashtags, max 60 words.",
   "reel_slides": ["hook (max 4 words, ALL CAPS)", "what it does (max 5 words)", "real example (max 5 words)", "action step (max 4 words)"],
-  "carousel_slides": ["Slide 1 — bold hook about the skill (max 10 words)", "Slide 2 — what this skill does, 1-2 sentences", "Slide 3 — real use case example, 1-2 sentences", "Slide 4 — the one action step to try today"]
+  "carousel_slides": ["bold catchy hook about the skill, max 10 words, NO label prefix", "what this skill does in simple terms, 1-2 sentences, NO label prefix", "real use case example, 1-2 sentences, NO label prefix", "the one action step to try today, NO label prefix"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -294,7 +294,7 @@ Return ONLY this JSON (no markdown, no extra text):
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
   "reel_script": "15-20 second spoken script delivering this bold take. Open with a shocking statement, back it up fast, end with a question. Conversational, no hashtags, max 60 words.",
   "reel_slides": ["shocking hook (max 4 words, ALL CAPS)", "the bold claim (max 5 words)", "the proof (max 5 words)", "the question (max 5 words)"],
-  "carousel_slides": ["Slide 1 — shocking/controversial hook, 1 line max 10 words", "Slide 2 — the bold claim explained, 1-2 sentences", "Slide 3 — proof or evidence, 1-2 sentences", "Slide 4 — the question to spark debate, 1 sentence"]
+  "carousel_slides": ["shocking/controversial hook, max 10 words, NO label prefix", "the bold claim explained, 1-2 sentences, NO label prefix", "proof or evidence, 1-2 sentences, NO label prefix", "the question to spark debate, 1 sentence, NO label prefix"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -349,7 +349,7 @@ Return ONLY this JSON (no markdown, no extra text):
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
   "reel_script": "15-20 second voiceover: hook about the free AI tool, what most people pay for that this replaces, one specific example of what it can do, end with 'Comment DM for the full workflow'. Max 60 words.",
   "reel_slides": ["hook (max 4 words, ALL CAPS)", "what it replaces (max 5 words)", "what it does free (max 5 words)", "COMMENT DM BELOW"],
-  "carousel_slides": ["Slide 1 — hook about the free AI tool, max 10 words", "Slide 2 — what expensive tool it replaces, 1-2 sentences", "Slide 3 — what you can do with it free, 1-2 sentences", "Slide 4 — Comment DM for the full step-by-step workflow"],
+  "carousel_slides": ["hook about the free AI tool, max 10 words, NO label prefix", "what expensive tool it replaces, 1-2 sentences, NO label prefix", "what you can do with it for free, 1-2 sentences, NO label prefix", "Comment DM for the full step-by-step workflow"],
   "workflow_detail": "the actual full step-by-step workflow to send via DM (5-8 steps, practical, specific)"
 }}"""
 

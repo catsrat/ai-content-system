@@ -56,23 +56,23 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 
 
 def _fetch_unsplash_photo(topic: str, access_key: str) -> Image.Image | None:
-    """Fetch a high-quality relevant photo from Unsplash."""
+    """Fetch a random relevant photo from Unsplash — different every time."""
     if not access_key:
         return None
     try:
-        # Extract clean keywords from topic
         stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
                       "of", "with", "by", "from", "use", "using", "how", "why", "what", "is"}
         keywords = [w.lower() for w in topic.split() if w.lower() not in stop_words][:3]
         query = " ".join(keywords) + " technology"
 
+        # Use /photos/random for a different photo every call
         resp = requests.get(
-            "https://api.unsplash.com/search/photos",
+            "https://api.unsplash.com/photos/random",
             params={
                 "query": query,
-                "per_page": 5,
                 "orientation": "portrait",
                 "content_filter": "high",
+                "count": 1,
             },
             headers={"Authorization": f"Client-ID {access_key}"},
             timeout=10,
@@ -81,22 +81,25 @@ def _fetch_unsplash_photo(topic: str, access_key: str) -> Image.Image | None:
             logger.warning(f"Unsplash API error: {resp.status_code}")
             return None
 
-        results = resp.json().get("results", [])
+        data = resp.json()
+        results = data if isinstance(data, list) else [data]
+
         if not results:
-            # Fallback: search just "AI technology"
+            # Fallback to generic AI photo
             resp2 = requests.get(
-                "https://api.unsplash.com/search/photos",
-                params={"query": "artificial intelligence technology", "per_page": 5, "orientation": "portrait"},
+                "https://api.unsplash.com/photos/random",
+                params={"query": "artificial intelligence", "orientation": "portrait", "count": 1},
                 headers={"Authorization": f"Client-ID {access_key}"},
                 timeout=10,
             )
-            results = resp2.json().get("results", []) if resp2.ok else []
+            data2 = resp2.json() if resp2.ok else []
+            results = data2 if isinstance(data2, list) else [data2]
 
-        if results:
+        if results and results[0].get("urls"):
             photo_url = results[0]["urls"]["regular"]
             img_resp = requests.get(photo_url, timeout=15)
             img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-            logger.info(f"Unsplash photo fetched for: {query}")
+            logger.info(f"Unsplash random photo fetched for: {query}")
             return img
 
     except Exception as e:
@@ -215,7 +218,6 @@ def _render_slide(
     # ── Top bar: brand handle only (minimal) ───────────────
     top_font = _get_font(26, bold=True)
     top_text = f"@{brand_name}"
-    tb = draw.textbbox((0, 0), top_text, font=top_font)
     draw.text((PADDING, 52), top_text, font=top_font, fill=(*highlight, 200))
 
     # ── Main text (lower 40% of image) ─────────────────────
