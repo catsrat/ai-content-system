@@ -10,7 +10,7 @@ Limits:
   - Skips if article topic was already posted recently
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import pytz
@@ -24,6 +24,22 @@ logger = get_logger("scheduler")
 
 MAX_POSTS_PER_DAY = 30
 POST_TYPE_ROTATION = ["daily_brief", "workflow", "learning", "differentiator", "workflow"]
+MIN_MINUTES_BETWEEN_POSTS = 30  # minimum gap between any two posts
+
+_last_post_time: datetime | None = None
+
+
+def _can_post_now() -> bool:
+    """Returns True if enough time has passed since the last post."""
+    global _last_post_time
+    if _last_post_time is None:
+        return True
+    return datetime.now() >= _last_post_time + timedelta(minutes=MIN_MINUTES_BETWEEN_POSTS)
+
+
+def _record_post_time():
+    global _last_post_time
+    _last_post_time = datetime.now()
 
 
 def _get_next_post_type() -> str:
@@ -46,6 +62,9 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
         today_count = get_today_count()
         if today_count >= MAX_POSTS_PER_DAY:
             logger.info(f"Daily limit reached ({MAX_POSTS_PER_DAY} posts). Skipping.")
+            return
+        if not _can_post_now():
+            logger.info("Cooldown active — waiting 30 min between posts. Skipping.")
             return
 
         logger.info("Checking for new AI news...")
@@ -76,6 +95,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
         try:
             run_func(post_type)
             increment_today_count()
+            _record_post_time()
             logger.info(f"Posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
         except Exception as e:
             logger.error(f"Post failed: {e}")
@@ -85,10 +105,14 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
         if today_count >= MAX_POSTS_PER_DAY:
             logger.info(f"Daily limit reached. Skipping workflow post.")
             return
+        if not _can_post_now():
+            logger.info("Cooldown active — waiting 30 min between posts. Skipping workflow.")
+            return
         logger.info("Posting scheduled workflow content...")
         try:
             run_func("workflow")
             increment_today_count()
+            _record_post_time()
             logger.info(f"Workflow posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
         except Exception as e:
             logger.error(f"Workflow post failed: {e}")
