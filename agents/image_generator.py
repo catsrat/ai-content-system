@@ -55,17 +55,51 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+
+# Rotating visual themes — cycles so every post looks different
+_VISUAL_THEMES = [
+    "futuristic city neon lights",
+    "abstract data visualization colorful",
+    "modern workspace minimal",
+    "neural network brain glowing",
+    "robot hand human hand",
+    "digital screen code",
+    "sunrise career success",
+    "office skyscraper glass",
+    "creative studio design",
+    "space galaxy universe",
+    "nature growth green",
+    "city skyline golden hour",
+    "abstract waves light",
+    "mountain summit achievement",
+    "hands typing keyboard focus",
+]
+_theme_index = 0
+
+
 def _fetch_unsplash_photo(topic: str, access_key: str) -> Image.Image | None:
-    """Fetch a random relevant photo from Unsplash — different every time."""
+    """Fetch a visually varied photo from Unsplash — rotates themes so no two posts look alike."""
+    global _theme_index
     if not access_key:
         return None
     try:
+        import random
+
+        # Mix topic keyword with a rotating visual theme for variety
         stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
                       "of", "with", "by", "from", "use", "using", "how", "why", "what", "is"}
-        keywords = [w.lower() for w in topic.split() if w.lower() not in stop_words][:3]
-        query = " ".join(keywords) + " technology"
+        topic_words = [w.lower() for w in topic.split() if w.lower() not in stop_words][:2]
 
-        # Use /photos/random for a different photo every call
+        # Pick a theme — advance index so next post gets a different one
+        theme = _VISUAL_THEMES[_theme_index % len(_VISUAL_THEMES)]
+        _theme_index += 1
+
+        # Alternate between topic-based and theme-based queries for max variety
+        if _theme_index % 2 == 0:
+            query = " ".join(topic_words) if topic_words else theme
+        else:
+            query = theme
+
         resp = requests.get(
             "https://api.unsplash.com/photos/random",
             params={
@@ -78,28 +112,17 @@ def _fetch_unsplash_photo(topic: str, access_key: str) -> Image.Image | None:
             timeout=10,
         )
         if not resp.ok:
-            logger.warning(f"Unsplash API error: {resp.status_code}")
+            logger.warning(f"Unsplash API error: {resp.status_code} for query: {query}")
             return None
 
         data = resp.json()
         results = data if isinstance(data, list) else [data]
 
-        if not results:
-            # Fallback to generic AI photo
-            resp2 = requests.get(
-                "https://api.unsplash.com/photos/random",
-                params={"query": "artificial intelligence", "orientation": "portrait", "count": 1},
-                headers={"Authorization": f"Client-ID {access_key}"},
-                timeout=10,
-            )
-            data2 = resp2.json() if resp2.ok else []
-            results = data2 if isinstance(data2, list) else [data2]
-
         if results and results[0].get("urls"):
             photo_url = results[0]["urls"]["regular"]
             img_resp = requests.get(photo_url, timeout=15)
             img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-            logger.info(f"Unsplash random photo fetched for: {query}")
+            logger.info(f"Unsplash photo: '{query}'")
             return img
 
     except Exception as e:
