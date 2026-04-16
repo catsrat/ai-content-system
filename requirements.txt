@@ -33,5 +33,6 @@ pytz>=2024.1
 upstash-redis
 moviepy
 elevenlabs
+edge-tts
 scipy
 beautifulsoup4

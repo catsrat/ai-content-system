@@ -196,24 +196,58 @@ def _wrap_text(text: str, max_chars: int = 14) -> list:
     return lines[:4]
 
 
-def generate_voiceover(text: str, api_key: str, output_path: str) -> bool:
-    """Generate AI voiceover using ElevenLabs."""
+def _generate_voiceover_edge_tts(text: str, output_path: str) -> bool:
+    """Generate voiceover using Microsoft Edge TTS (free, no API key needed)."""
     try:
-        client = ElevenLabs(api_key=api_key)
-        audio = client.text_to_speech.convert(
-            voice_id=VOICE_ID,
-            text=text,
-            model_id="eleven_turbo_v2",
-            output_format="mp3_44100_128",
-        )
-        with open(output_path, "wb") as f:
-            for chunk in audio:
-                f.write(chunk)
-        logger.info(f"Voiceover saved: {output_path}")
+        import asyncio
+        import edge_tts
+
+        # Use a professional male voice — works on Railway with no restrictions
+        EDGE_VOICE = "en-US-GuyNeural"
+
+        async def _run():
+            communicate = edge_tts.Communicate(text, EDGE_VOICE)
+            # edge-tts outputs mp3 by default
+            mp3_path = output_path.replace(".mp3", "_edge.mp3")
+            await communicate.save(mp3_path)
+            return mp3_path
+
+        mp3_path = asyncio.run(_run())
+
+        # Rename to expected output path
+        import os
+        if os.path.exists(mp3_path):
+            os.rename(mp3_path, output_path)
+
+        logger.info(f"Edge TTS voiceover saved: {output_path}")
         return True
     except Exception as e:
-        logger.error(f"Voiceover generation failed: {e}")
+        logger.error(f"Edge TTS voiceover failed: {e}")
         return False
+
+
+def generate_voiceover(text: str, api_key: str, output_path: str) -> bool:
+    """Generate AI voiceover — tries ElevenLabs first, falls back to Edge TTS."""
+    # Try ElevenLabs first (better quality)
+    if api_key:
+        try:
+            client = ElevenLabs(api_key=api_key)
+            audio = client.text_to_speech.convert(
+                voice_id=VOICE_ID,
+                text=text,
+                model_id="eleven_turbo_v2",
+                output_format="mp3_44100_128",
+            )
+            with open(output_path, "wb") as f:
+                for chunk in audio:
+                    f.write(chunk)
+            logger.info(f"ElevenLabs voiceover saved: {output_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"ElevenLabs failed ({e}), falling back to Edge TTS...")
+
+    # Fallback: Microsoft Edge TTS (free, no restrictions on Railway)
+    return _generate_voiceover_edge_tts(text, output_path)
 
 
 def generate_reel(
