@@ -25,7 +25,12 @@ GRAPH_API_BASE = "https://graph.facebook.com/v18.0"
 
 class InstagramPublisher:
     def __init__(self, access_token: str, business_account_id: str):
-        self.access_token = access_token
+        # Use token manager to get a valid long-lived token
+        try:
+            from utils.instagram_token_manager import get_valid_token
+            self.access_token = get_valid_token() or access_token
+        except Exception:
+            self.access_token = access_token
         self.account_id = business_account_id
 
     def _api_post(self, endpoint: str, params: dict) -> dict:
