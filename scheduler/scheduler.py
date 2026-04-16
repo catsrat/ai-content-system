@@ -33,20 +33,19 @@ def _get_next_post_type() -> str:
 
 def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/Kolkata") -> BlockingScheduler:
     """
-    Build a news-triggered scheduler that checks every 30 minutes.
-
-    Args:
-        fetch_func: callable() → list of articles
-        run_func: callable(post_type) — function to post content
-        timezone: timezone string
+    Build a news-triggered scheduler:
+    - Checks for new AI news every 10 minutes → posts news content
+    - Posts a workflow post every 4 hours regardless of news
     """
     tz = pytz.timezone(timezone)
     scheduler = BlockingScheduler(timezone=tz)
 
-    def check_and_post():
+    NEWS_POST_TYPES = ["daily_brief", "learning", "differentiator"]
+
+    def check_and_post_news():
         today_count = get_today_count()
         if today_count >= MAX_POSTS_PER_DAY:
-            logger.info(f"Daily limit reached ({MAX_POSTS_PER_DAY} posts). Skipping until tomorrow.")
+            logger.info(f"Daily limit reached ({MAX_POSTS_PER_DAY} posts). Skipping.")
             return
 
         logger.info("Checking for new AI news...")
@@ -55,7 +54,7 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
             logger.info("No articles found.")
             return
 
-        # Find first unseen article using Redis
+        # Find first unseen article
         new_article = None
         for article in articles:
             key = article["title"].lower()[:80]
@@ -67,27 +66,51 @@ def build_news_triggered_scheduler(fetch_func, run_func, timezone: str = "Asia/K
             logger.info("No new articles since last check. Skipping.")
             return
 
-        # Mark as seen in Redis BEFORE posting to prevent duplicates on redeploy
+        # Mark as seen BEFORE posting
         mark_article_seen(new_article["title"].lower()[:80])
 
-        post_type = _get_next_post_type()
-        logger.info(f"New article found: '{new_article['title'][:60]}' → posting as [{post_type}]")
+        count = get_today_count()
+        post_type = NEWS_POST_TYPES[count % len(NEWS_POST_TYPES)]
+        logger.info(f"New article: '{new_article['title'][:60]}' → [{post_type}]")
 
         try:
             run_func(post_type)
             increment_today_count()
-            new_count = get_today_count()
-            logger.info(f"Posted successfully. Today's count: {new_count}/{MAX_POSTS_PER_DAY}")
+            logger.info(f"Posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
         except Exception as e:
             logger.error(f"Post failed: {e}")
 
+    def post_workflow():
+        today_count = get_today_count()
+        if today_count >= MAX_POSTS_PER_DAY:
+            logger.info(f"Daily limit reached. Skipping workflow post.")
+            return
+        logger.info("Posting scheduled workflow content...")
+        try:
+            run_func("workflow")
+            increment_today_count()
+            logger.info(f"Workflow posted. Today: {get_today_count()}/{MAX_POSTS_PER_DAY}")
+        except Exception as e:
+            logger.error(f"Workflow post failed: {e}")
+
+    # News-triggered: every 10 minutes
     scheduler.add_job(
-        func=check_and_post,
+        func=check_and_post_news,
         trigger=IntervalTrigger(minutes=10, timezone=tz),
         id="news_watcher",
         name="News Watcher",
         replace_existing=True,
-        next_run_time=datetime.now(tz),  # Run immediately on start
+        next_run_time=datetime.now(tz),
+    )
+
+    # Workflow post: every 4 hours regardless of news
+    scheduler.add_job(
+        func=post_workflow,
+        trigger=IntervalTrigger(hours=4, timezone=tz),
+        id="workflow_poster",
+        name="Workflow Poster",
+        replace_existing=True,
+        next_run_time=datetime.now(tz),
     )
 
     return scheduler
