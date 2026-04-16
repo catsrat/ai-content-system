@@ -166,6 +166,7 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
                 post_type=post.post_type,
                 headline=post.key_message,
                 script=post.reel_script,
+                slides=post.reel_slides or [],
                 brand_name=cfg.brand_name,
                 filename=reel_filename,
                 background_image_url=bg_url,

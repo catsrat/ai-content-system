@@ -346,6 +346,7 @@ def generate_reel(
     post_type: str,
     headline: str,
     script: str,
+    slides: list = None,
     brand_name: str = "AI_TECH_NEWSS",
     filename: str = None,
     background_image_url: str = None,
@@ -361,7 +362,12 @@ def generate_reel(
     output_path = os.path.join(OUTPUT_DIR, filename)
 
     bg_img = _download_image(background_image_url)
-    lines = _wrap_text(headline, max_chars=12)
+
+    # Use Claude-generated slides if available, else fall back to wrapped headline
+    if slides and len(slides) >= 2:
+        lines = [s.strip().upper() for s in slides[:5] if s.strip()]
+    else:
+        lines = _wrap_text(headline, max_chars=14)
     n_lines = len(lines)
 
     # Generate voiceover

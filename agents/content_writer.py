@@ -97,6 +97,7 @@ class GeneratedPost:
     image_prompt: str       # prompt for Canva/image generation
     key_message: str        # 1-line summary for image headline
     reel_script: str        # 15-25 second voiceover script for Reels
+    reel_slides: list = None  # 4-5 short slide texts for visual display in reel
     workflow_detail: str = ""  # full step-by-step workflow guide (workflow posts only)
 
 
@@ -194,7 +195,8 @@ Return ONLY this JSON (no markdown, no extra text):
   "linkedin_text": "linkedin version (professional, line breaks, 150-300 words)",
   "instagram_caption": "instagram caption (punchy opener, bullets, CTA)",
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
-  "reel_script": "15-20 second spoken script for a news anchor voiceover. Start with a hook, deliver the key fact, explain why it matters for careers. Conversational, no hashtags, no emojis. Max 60 words."
+  "reel_script": "15-20 second spoken script for a news anchor voiceover. Start with a hook, deliver the key fact, explain why it matters for careers. Conversational, no hashtags, no emojis. Max 60 words.",
+  "reel_slides": ["hook line (max 4 words, ALL CAPS)", "key fact (max 5 words)", "why it matters (max 5 words)", "call to action (max 4 words)"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -212,6 +214,7 @@ Return ONLY this JSON (no markdown, no extra text):
             image_prompt=data["image_prompt"],
             key_message=data["key_message"],
             reel_script=data.get("reel_script", ""),
+            reel_slides=data.get("reel_slides", []),
         )
 
     def write_learning_post(self, articles: list[dict]) -> GeneratedPost:
@@ -236,7 +239,8 @@ Return ONLY this JSON (no markdown, no extra text):
   "linkedin_text": "linkedin version with hook, concept explanation, real use case, action step (150-250 words)",
   "instagram_caption": "instagram carousel caption: hook + 3-4 bullet slides description + save CTA",
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
-  "reel_script": "15-20 second spoken script teaching this skill. Start with a hook, explain concept in simple terms, give one action step. Conversational, no hashtags, max 60 words."
+  "reel_script": "15-20 second spoken script teaching this skill. Start with a hook, explain concept in simple terms, give one action step. Conversational, no hashtags, max 60 words.",
+  "reel_slides": ["hook (max 4 words, ALL CAPS)", "what it does (max 5 words)", "real example (max 5 words)", "action step (max 4 words)"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -254,6 +258,7 @@ Return ONLY this JSON (no markdown, no extra text):
             image_prompt=data["image_prompt"],
             key_message=data["key_message"],
             reel_script=data.get("reel_script", ""),
+            reel_slides=data.get("reel_slides", []),
         )
 
     def write_differentiator_post(self, articles: list[dict]) -> GeneratedPost:
@@ -282,7 +287,8 @@ Return ONLY this JSON (no markdown, no extra text):
   "linkedin_text": "linkedin version — bold opener, build the argument, career impact, end with question (150-300 words)",
   "instagram_caption": "instagram version — bold hook, quick argument, career implication, question CTA",
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
-  "reel_script": "15-20 second spoken script delivering this bold take. Open with a shocking statement, back it up fast, end with a question. Conversational, no hashtags, max 60 words."
+  "reel_script": "15-20 second spoken script delivering this bold take. Open with a shocking statement, back it up fast, end with a question. Conversational, no hashtags, max 60 words.",
+  "reel_slides": ["shocking hook (max 4 words, ALL CAPS)", "the bold claim (max 5 words)", "the proof (max 5 words)", "the question (max 5 words)"]
 }}"""
 
         raw = self._call_claude(prompt)
@@ -300,6 +306,7 @@ Return ONLY this JSON (no markdown, no extra text):
             image_prompt=data["image_prompt"],
             key_message=data["key_message"],
             reel_script=data.get("reel_script", ""),
+            reel_slides=data.get("reel_slides", []),
         )
 
     def write_workflow_post(self, workflow_ideas: list[dict]) -> GeneratedPost:
@@ -334,6 +341,7 @@ Return ONLY this JSON (no markdown, no extra text):
   "instagram_caption": "instagram caption — hook line, tease the workflow, 'Comment DM and I'll send you the full step-by-step workflow 👇'",
   "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
   "reel_script": "15-20 second voiceover: hook about the free AI tool, what most people pay for that this replaces, one specific example of what it can do, end with 'Comment DM for the full workflow'. Max 60 words.",
+  "reel_slides": ["hook (max 4 words, ALL CAPS)", "what it replaces (max 5 words)", "what it does free (max 5 words)", "COMMENT DM BELOW"],
   "workflow_detail": "the actual full step-by-step workflow to send via DM (5-8 steps, practical, specific)"
 }}"""
 
@@ -373,6 +381,7 @@ Return ONLY this JSON (no markdown, no extra text):
             image_prompt=data["image_prompt"],
             key_message=data["key_message"],
             reel_script=data.get("reel_script", ""),
+            reel_slides=data.get("reel_slides", []),
             workflow_detail=workflow_detail,
         )
 
