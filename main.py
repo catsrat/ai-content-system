@@ -27,7 +27,7 @@ from agents.content_writer import ContentWriter, GeneratedPost
 from agents.image_generator import generate_post_image
 from agents.reels_generator import generate_reel
 from agents.analyst_agent import run_analyst
-from utils.cloudinary_uploader import init_cloudinary, upload_image
+from utils.cloudinary_uploader import init_cloudinary, upload_image, upload_video
 from publishers.twitter import TwitterPublisher
 from publishers.linkedin import LinkedInPublisher
 from publishers.instagram import InstagramPublisher
@@ -176,17 +176,30 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
             logger.warning(f"Reel generation failed: {e}")
 
     # 4. Upload to Cloudinary (needed for Instagram)
-    if local_image_path:
+    public_reel_url = None
+    if local_image_path or local_reel_path:
         try:
             init_cloudinary(
                 cloud_name=cfg.cloudinary_cloud_name,
                 api_key=cfg.cloudinary_api_key,
                 api_secret=cfg.cloudinary_api_secret,
             )
+        except Exception as e:
+            logger.warning(f"Cloudinary init failed: {e}")
+
+    if local_image_path:
+        try:
             public_image_url = upload_image(local_image_path, folder="ai-content")
             logger.info(f"Image uploaded to Cloudinary: {public_image_url}")
         except Exception as e:
-            logger.warning(f"Cloudinary upload failed: {e}")
+            logger.warning(f"Cloudinary image upload failed: {e}")
+
+    if local_reel_path:
+        try:
+            public_reel_url = upload_video(local_reel_path, folder="ai-content/reels")
+            logger.info(f"Reel uploaded to Cloudinary: {public_reel_url}")
+        except Exception as e:
+            logger.warning(f"Cloudinary reel upload failed: {e}")
 
     # 5. Publish to all platforms
     results = []
@@ -232,25 +245,42 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
 
     # — Instagram —
     if cfg.instagram_access_token and cfg.instagram_business_account_id:
-        logger.info("Publishing to Instagram...")
-        try:
-            if public_image_url:
-                caption = post.instagram_caption + post.instagram_hashtags
-                instagram = InstagramPublisher(
-                    access_token=cfg.instagram_access_token,
-                    business_account_id=cfg.instagram_business_account_id,
+        caption = post.instagram_caption + post.instagram_hashtags
+        instagram = InstagramPublisher(
+            access_token=cfg.instagram_access_token,
+            business_account_id=cfg.instagram_business_account_id,
+        )
+
+        # Post Reel if available (higher reach than images)
+        if public_reel_url:
+            logger.info("Publishing Reel to Instagram...")
+            try:
+                result = instagram.publish_reel(
+                    video_url=public_reel_url,
+                    caption=caption,
                 )
+                results.append(result)
+                logger.info(f"Instagram Reel: {'OK' if result['success'] else 'FAILED'}")
+            except Exception as e:
+                logger.error(f"Instagram Reel error: {e}")
+                results.append({"success": False, "platform": "instagram", "error": str(e)})
+
+        # Also post image (or as fallback if no reel)
+        if public_image_url:
+            logger.info("Publishing image to Instagram...")
+            try:
                 result = instagram.publish(
                     caption=caption,
                     image_urls=[public_image_url],
                 )
                 results.append(result)
-                logger.info(f"Instagram: {'OK' if result['success'] else 'FAILED'}")
-            else:
-                logger.warning("Instagram skipped — no public image URL available")
-        except Exception as e:
-            logger.error(f"Instagram error: {e}")
-            results.append({"success": False, "platform": "instagram", "error": str(e)})
+                logger.info(f"Instagram image: {'OK' if result['success'] else 'FAILED'}")
+            except Exception as e:
+                logger.error(f"Instagram image error: {e}")
+                results.append({"success": False, "platform": "instagram", "error": str(e)})
+
+        if not public_reel_url and not public_image_url:
+            logger.warning("Instagram skipped — no public URL available")
     else:
         logger.info("Instagram skipped — keys not configured yet")
 

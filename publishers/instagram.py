@@ -163,6 +163,30 @@ class InstagramPublisher:
         self._wait_for_container(container_id)
         return self.publish_container(container_id)
 
+    def post_reel(self, video_url: str, caption: str) -> str:
+        """
+        Publish a Reel to Instagram.
+        video_url must be a public HTTPS URL (use Cloudinary).
+        Returns published media ID.
+        """
+        # Step 1: Create reel container
+        data = self._api_post(
+            f"{self.account_id}/media",
+            params={
+                "video_url": video_url,
+                "caption": caption,
+                "media_type": "REELS",
+            },
+        )
+        container_id = data.get("id", "")
+        logger.info(f"Instagram Reel container created: {container_id}")
+
+        # Step 2: Wait for video processing (videos take longer — up to 5 min)
+        self._wait_for_container(container_id, max_wait=300)
+
+        # Step 3: Publish
+        return self.publish_container(container_id)
+
     def publish(
         self,
         caption: str,
@@ -186,4 +210,13 @@ class InstagramPublisher:
                 return {"success": True, "platform": "instagram", "id": media_id, "type": "carousel"}
         except Exception as e:
             logger.error(f"Instagram publish failed: {e}")
+            return {"success": False, "platform": "instagram", "error": str(e)}
+
+    def publish_reel(self, video_url: str, caption: str) -> dict:
+        """Publish a Reel. Returns result dict."""
+        try:
+            media_id = self.post_reel(video_url, caption)
+            return {"success": True, "platform": "instagram", "id": media_id, "type": "reel"}
+        except Exception as e:
+            logger.error(f"Instagram Reel publish failed: {e}")
             return {"success": False, "platform": "instagram", "error": str(e)}

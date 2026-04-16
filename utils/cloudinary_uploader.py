@@ -61,3 +61,30 @@ def upload_images(file_paths: list[str], folder: str = "ai-content-system") -> l
         except Exception as e:
             logger.error(f"Skipping {path} due to upload error: {e}")
     return urls
+
+
+def upload_video(
+    file_path: str,
+    folder: str = "ai-content-system",
+    public_id: str = None,
+) -> str:
+    """
+    Upload a video file to Cloudinary.
+    Returns the secure public URL of the uploaded video.
+    """
+    try:
+        upload_params = {
+            "folder": folder,
+            "resource_type": "video",
+            "overwrite": True,
+        }
+        if public_id:
+            upload_params["public_id"] = public_id
+
+        result = cloudinary.uploader.upload(file_path, **upload_params)
+        url = result.get("secure_url", "")
+        logger.info(f"Video uploaded to Cloudinary: {url}")
+        return url
+    except Exception as e:
+        logger.error(f"Cloudinary video upload failed for {file_path}: {e}")
+        raise
