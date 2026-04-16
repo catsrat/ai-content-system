@@ -84,16 +84,15 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
 
     # Filter out already-seen articles using Redis
     try:
-        from utils.redis_store import is_article_seen, mark_article_seen
+        from utils.redis_store import is_article_seen
         articles = [a for a in all_articles if not is_article_seen(a["title"].lower()[:80])]
         if not articles:
             logger.warning("All articles already posted. Using all articles as fallback.")
             articles = all_articles
         else:
             logger.info(f"Fetched {len(all_articles)} articles, {len(articles)} are new")
-        # Mark the top articles as seen
-        for a in articles[:3]:
-            mark_article_seen(a["title"].lower()[:80])
+        # Note: articles are marked seen by the scheduler before calling run_post
+        # to avoid double-marking which drains the article pool too fast
     except Exception:
         articles = all_articles
         logger.info(f"Fetched {len(articles)} articles")

@@ -19,6 +19,12 @@ RSS_FEEDS = [
     ("MIT Tech Review", "https://www.technologyreview.com/feed/"),
     ("Wired AI", "https://www.wired.com/feed/category/artificial-intelligence/latest/rss"),
     ("AI News", "https://artificialintelligence-news.com/feed/"),
+    ("ZDNet AI", "https://www.zdnet.com/topic/artificial-intelligence/rss.xml"),
+    ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/technology-lab"),
+    ("The Register AI", "https://www.theregister.com/emergent_tech/AI/headlines.atom"),
+    ("InfoQ AI", "https://feed.infoq.com/"),
+    ("Analytics Vidhya", "https://www.analyticsvidhya.com/feed/"),
+    ("Towards Data Science", "https://towardsdatascience.com/feed"),
 ]
 
 
@@ -122,8 +128,8 @@ def fetch_all_news(news_api_key: str = "") -> list[dict]:
     Fetch news from all sources, deduplicate by title, and return
     sorted by recency. Returns top 15 most relevant articles.
     """
-    rss_articles = fetch_rss_articles(max_per_feed=3)
-    api_articles = fetch_newsapi_articles(api_key=news_api_key, max_articles=10)
+    rss_articles = fetch_rss_articles(max_per_feed=5)
+    api_articles = fetch_newsapi_articles(api_key=news_api_key, max_articles=20)
 
     all_articles = rss_articles + api_articles
 
@@ -140,4 +146,4 @@ def fetch_all_news(news_api_key: str = "") -> list[dict]:
     unique = [a for a in unique if a["title"] and (a["summary"] or a["url"])]
 
     logger.info(f"Total unique articles fetched: {len(unique)}")
-    return unique[:15]
+    return unique[:80]
