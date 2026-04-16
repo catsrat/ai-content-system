@@ -36,7 +36,9 @@ class InstagramPublisher:
             params=params,
             timeout=30,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            logger.error(f"Instagram API {resp.status_code} — {resp.text}")
+            resp.raise_for_status()
         return resp.json()
 
     def _api_get(self, endpoint: str, params: dict = None) -> dict:
