@@ -146,7 +146,10 @@ def send_daily_report(
         msg["To"] = to_email
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(gmail_user, gmail_app_password)
             server.sendmail(gmail_user, to_email, msg.as_string())
 
@@ -219,7 +222,10 @@ def send_workflow_guide(
         msg["To"] = to_email
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(gmail_user, gmail_app_password)
             server.sendmail(gmail_user, to_email, msg.as_string())
 
