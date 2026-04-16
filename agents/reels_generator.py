@@ -14,12 +14,9 @@ import os
 import io
 import requests
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from elevenlabs.client import ElevenLabs
-from moviepy import (
-    ImageSequenceClip, AudioFileClip,
-    concatenate_videoclips,
-)
+from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 from utils.logger import get_logger
 
 logger = get_logger("reels_generator")
@@ -249,7 +246,7 @@ def _wrap_text(text: str, max_chars: int = 14) -> list:
     return lines[:4]
 
 
-def _make_animated_clip(
+def _make_static_clip(
     text_lines_visible: list,
     all_lines: list,
     post_type: str,
@@ -257,52 +254,26 @@ def _make_animated_clip(
     badge_text: str,
     highlight_color: tuple,
     duration: float,
-    time_start: float,
-    total_duration: float,
+    progress: float,
     bg_color: tuple,
-    fade_in: bool = True,
-) -> list:
+) -> ImageClip:
     """
-    Generate a list of numpy frames for one clip segment.
-    Includes Ken Burns zoom + text fade-in for newest line.
-    Returns list of np.ndarray frames.
+    Render ONE frame and hold it for `duration` seconds.
+    Uses ImageClip (not ImageSequenceClip) to keep memory ~6MB per clip.
     """
-    n_frames = max(1, int(duration * FPS))
-    frames = []
-
-    for i in range(n_frames):
-        # Global time position (0→1 across full reel)
-        global_t = (time_start + i / FPS) / max(total_duration, 1)
-        global_t = min(global_t, 1.0)
-
-        # Ken Burns: zoom from 1.0 to 1.07 across the full reel
-        zoom = 1.0 + 0.07 * _ease_in_out(global_t)
-
-        # Progress bar fills as reel plays
-        prog = global_t
-
-        # Text fade-in for newest line only
-        if fade_in:
-            raw_alpha = i / max(FADE_FRAMES - 1, 1)
-            newest_alpha = min(1.0, _ease_in_out(raw_alpha))
-        else:
-            newest_alpha = 1.0
-
-        frame = _render_frame(
-            text_lines_visible=text_lines_visible,
-            all_lines=all_lines,
-            post_type=post_type,
-            bg_img=bg_img,
-            badge_text=badge_text,
-            highlight_color=highlight_color,
-            zoom=zoom,
-            newest_line_alpha=newest_alpha,
-            progress=prog,
-            bg_color=bg_color,
-        )
-        frames.append(frame)
-
-    return frames
+    frame = _render_frame(
+        text_lines_visible=text_lines_visible,
+        all_lines=all_lines,
+        post_type=post_type,
+        bg_img=bg_img,
+        badge_text=badge_text,
+        highlight_color=highlight_color,
+        zoom=1.0,
+        newest_line_alpha=1.0,
+        progress=progress,
+        bg_color=bg_color,
+    )
+    return ImageClip(frame, duration=duration)
 
 
 def _generate_voiceover_edge_tts(text: str, output_path: str) -> bool:
@@ -404,14 +375,14 @@ def generate_reel(
     text_duration = n_lines * seconds_per_line + hold_duration
     total_duration = max(text_duration, audio_duration) if audio_duration else text_duration
 
-    # ── Build animated frames ────────────────────────────────────
-    all_frames = []
+    # ── Build static clips (one frame per segment, memory-safe) ──
+    clips = []
     time_cursor = 0.0
 
-    # Each line reveals one at a time with fade-in
     for i in range(1, n_lines + 1):
         duration = seconds_per_line if i < n_lines else hold_duration
-        frames = _make_animated_clip(
+        progress = time_cursor / max(total_duration, 1)
+        clip = _make_static_clip(
             text_lines_visible=lines[:i],
             all_lines=lines,
             post_type=post_type,
@@ -419,18 +390,16 @@ def generate_reel(
             badge_text=badge,
             highlight_color=highlight,
             duration=duration,
-            time_start=time_cursor,
-            total_duration=total_duration,
+            progress=progress,
             bg_color=bg_color,
-            fade_in=True,
         )
-        all_frames.extend(frames)
+        clips.append(clip)
         time_cursor += duration
 
     # Hold final frame for remaining audio duration
     if audio_duration > time_cursor:
         remaining = audio_duration - time_cursor
-        frames = _make_animated_clip(
+        clip = _make_static_clip(
             text_lines_visible=lines,
             all_lines=lines,
             post_type=post_type,
@@ -438,16 +407,12 @@ def generate_reel(
             badge_text=badge,
             highlight_color=highlight,
             duration=remaining,
-            time_start=time_cursor,
-            total_duration=total_duration,
+            progress=1.0,
             bg_color=bg_color,
-            fade_in=False,
         )
-        all_frames.extend(frames)
-        time_cursor += remaining
+        clips.append(clip)
 
-    # Build video from frame sequence
-    video = ImageSequenceClip(all_frames, fps=FPS)
+    video = concatenate_videoclips(clips, method="compose")
 
     # Mix audio
     try:
