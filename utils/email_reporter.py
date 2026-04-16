@@ -156,3 +156,76 @@ def send_daily_report(
     except Exception as e:
         logger.error(f"Email report failed: {e}")
         return False
+
+
+def send_workflow_guide(
+    gmail_user: str,
+    gmail_app_password: str,
+    to_email: str,
+    topic: str,
+    workflow_detail: str,
+):
+    """
+    Email the full workflow guide whenever a workflow post is published.
+    Paste this content into a Notion page and put that link in ManyChat.
+    """
+    today = date.today().strftime("%B %d, %Y")
+
+    # Convert plain text steps to HTML bullets
+    lines = workflow_detail.strip().split("\n")
+    steps_html = ""
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        steps_html += f'<p style="margin: 8px 0; color: #ddd; font-size: 15px;">{line}</p>\n'
+
+    html = f"""
+    <html><body style="font-family: Arial, sans-serif; background: #0a0f28; color: #ffffff; padding: 20px;">
+    <div style="max-width: 600px; margin: 0 auto;">
+
+        <div style="background: linear-gradient(135deg, #1a0a35, #2a1060); border: 1px solid #b450ff; border-radius: 12px; padding: 24px; margin-bottom: 20px; text-align: center;">
+            <h1 style="color: #b450ff; margin: 0; font-size: 26px;">⚡ New Workflow Post Published</h1>
+            <p style="color: #aaa; margin: 8px 0 0;">{today}</p>
+        </div>
+
+        <div style="background: #111830; border-radius: 10px; padding: 24px; margin-bottom: 16px;">
+            <h2 style="color: #b450ff; margin: 0 0 8px; font-size: 20px;">{topic}</h2>
+            <p style="color: #888; margin: 0 0 20px; font-size: 13px;">Full step-by-step guide — paste this into Notion or Google Docs, then put that link in ManyChat</p>
+            <div style="background: #0a0f28; border-left: 4px solid #b450ff; border-radius: 4px; padding: 16px;">
+                {steps_html}
+            </div>
+        </div>
+
+        <div style="background: #111830; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+            <h3 style="color: #00b4ff; margin: 0 0 10px;">Next steps:</h3>
+            <p style="color: #ddd; margin: 6px 0;">1. Copy the workflow above</p>
+            <p style="color: #ddd; margin: 6px 0;">2. Paste into a <strong>Notion page</strong> or <strong>Google Doc</strong></p>
+            <p style="color: #ddd; margin: 6px 0;">3. Get the shareable link</p>
+            <p style="color: #ddd; margin: 6px 0;">4. Update your <strong>ManyChat</strong> flow with this link</p>
+        </div>
+
+        <div style="text-align: center; padding: 16px; color: #555; font-size: 12px;">
+            <p>AI_TECH_NEWSS Automation System</p>
+        </div>
+    </div>
+    </body></html>
+    """
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"⚡ New Workflow Guide: {topic}"
+        msg["From"] = gmail_user
+        msg["To"] = to_email
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(gmail_user, gmail_app_password)
+            server.sendmail(gmail_user, to_email, msg.as_string())
+
+        logger.info(f"Workflow guide emailed to {to_email}: {topic}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Workflow guide email failed: {e}")
+        return False

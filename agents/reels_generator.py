@@ -352,9 +352,7 @@ def generate_reel(
         audio_clips = []
 
         if has_audio:
-            voiceover = AudioFileClip(audio_path).with_effects(
-                [lambda c: c.with_volume_scaled(1.0)]
-            )
+            voiceover = AudioFileClip(audio_path)
             audio_clips.append(voiceover)
 
         if has_music and os.path.exists(music_path):
@@ -362,9 +360,7 @@ def generate_reel(
             # Trim music to video duration
             music = music.subclipped(0, min(music.duration, video.duration))
             # Lower music volume (20% so voiceover is clear)
-            music = music.with_effects(
-                [lambda c: c.with_volume_scaled(0.20)]
-            )
+            music = music.with_volume_scaled(0.20)
             audio_clips.append(music)
 
         if audio_clips:
