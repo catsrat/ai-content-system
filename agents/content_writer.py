@@ -298,6 +298,58 @@ Return ONLY this JSON (no markdown, no extra text):
             reel_script=data.get("reel_script", ""),
         )
 
+    def write_workflow_post(self, workflow_ideas: list[dict]) -> GeneratedPost:
+        """Generate an AI Workflow post — free tool use case with comment DM trigger."""
+        posted = _load_posted_topics()
+        posted_str = ", ".join(posted[-10:]) if posted else "none"
+
+        ideas_text = "\n".join(
+            f"- [{w['source']}] {w['title']}: {w['summary'][:200]}"
+            for w in workflow_ideas[:6]
+        )
+
+        prompt = f"""You are creating an AI WORKFLOW post for @AI_TECH_NEWSS.
+
+These are real AI tool use cases and workflow ideas from Reddit and AI communities:
+{ideas_text}
+
+Already posted about these recently (DO NOT repeat): {posted_str}
+
+Pick the MOST valuable and surprising free AI workflow from the list above.
+The post must make people think "I didn't know I could do that for free!"
+
+The CTA must be: "Comment DM and I'll send you the full step-by-step workflow"
+
+Return ONLY this JSON (no markdown, no extra text):
+{{
+  "topic": "the workflow in 5 words",
+  "key_message": "Use [AI Tool] For Free (max 5 words, ALL CAPS)",
+  "image_prompt": "visual concept for this workflow post — show the AI tool being used productively",
+  "twitter_text": "tweet version — hook about free AI tool, what it replaces, max 280 chars",
+  "linkedin_text": "linkedin version — hook, what the tool does, 3 bullet use cases, CTA to comment DM (150-200 words)",
+  "instagram_caption": "instagram caption — hook line, tease the workflow, 'Comment DM and I'll send you the full step-by-step workflow 👇'",
+  "instagram_hashtags": "15 relevant hashtags as a single string starting with space",
+  "reel_script": "15-20 second voiceover: hook about the free AI tool, what most people pay for that this replaces, one specific example of what it can do, end with 'Comment DM for the full workflow'. Max 60 words.",
+  "workflow_detail": "the actual full step-by-step workflow to send via DM (5-8 steps, practical, specific)"
+}}"""
+
+        raw = self._call_claude(prompt)
+        data = self._parse_json(raw)
+        _save_posted_topic(data.get("topic", ""))
+        logger.info(f"Workflow Post generated: {data.get('topic', '')}")
+
+        return GeneratedPost(
+            post_type="workflow",
+            topic=data["topic"],
+            twitter_text=data["twitter_text"],
+            linkedin_text=data["linkedin_text"],
+            instagram_caption=data["instagram_caption"],
+            instagram_hashtags=data["instagram_hashtags"],
+            image_prompt=data["image_prompt"],
+            key_message=data["key_message"],
+            reel_script=data.get("reel_script", ""),
+        )
+
     def generate_all_posts(self, articles: list[dict]) -> list[GeneratedPost]:
         """Generate all 3 post types for today."""
         posts = []

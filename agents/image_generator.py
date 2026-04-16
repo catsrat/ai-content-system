@@ -25,6 +25,7 @@ THEME_COLORS = {
     "daily_brief":    {"bg": (10, 15, 40),   "highlight": (0, 180, 255),  "badge": "📰 AI NEWS"},
     "learning":       {"bg": (10, 30, 15),   "highlight": (0, 220, 100),  "badge": "🧠 LEARN NOW"},
     "differentiator": {"bg": (35, 10, 10),   "highlight": (255, 80, 30),  "badge": "🔥 HOT TAKE"},
+    "workflow":       {"bg": (20, 10, 35),   "highlight": (180, 80, 255), "badge": "⚡ FREE TOOL"},
 }
 
 # Words to auto-highlight in headlines

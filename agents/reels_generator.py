@@ -36,8 +36,8 @@ THEME_COLORS = {
     "differentiator": {"highlight": (255, 80, 30),  "badge": "HOT TAKE"},
 }
 
-# ElevenLabs voice ID — Rachel (calm, professional news anchor)
-VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+# ElevenLabs voice ID — Adam (professional, works on free tier)
+VOICE_ID = "pNInz6obpgDQGcFmaJgB"
 
 
 def _get_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:

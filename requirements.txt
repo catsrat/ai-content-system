@@ -34,3 +34,4 @@ upstash-redis
 moviepy
 elevenlabs
 scipy
+beautifulsoup4

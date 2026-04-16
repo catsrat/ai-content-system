@@ -22,6 +22,7 @@ from datetime import datetime
 
 from config import load_config
 from agents.news_fetcher import fetch_all_news
+from agents.workflow_fetcher import fetch_workflow_ideas
 from agents.content_writer import ContentWriter, GeneratedPost
 from agents.image_generator import generate_post_image
 from agents.reels_generator import generate_reel
@@ -106,17 +107,21 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
         brand_tone=cfg.brand_tone,
     )
 
-    post_fn = {
-        "daily_brief": writer.write_daily_brief,
-        "learning": writer.write_learning_post,
-        "differentiator": writer.write_differentiator_post,
-    }.get(post_type)
+    if post_type == "workflow":
+        workflow_ideas = fetch_workflow_ideas(max_results=10)
+        post = writer.write_workflow_post(workflow_ideas)
+    else:
+        post_fn = {
+            "daily_brief": writer.write_daily_brief,
+            "learning": writer.write_learning_post,
+            "differentiator": writer.write_differentiator_post,
+        }.get(post_type)
 
-    if not post_fn:
-        logger.error(f"Unknown post type: {post_type}")
-        return
+        if not post_fn:
+            logger.error(f"Unknown post type: {post_type}")
+            return
 
-    post = post_fn(articles)
+        post = post_fn(articles)
     logger.info(f"Content generated: {post.topic}")
 
     if dry_run:
