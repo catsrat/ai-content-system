@@ -339,7 +339,8 @@ Return ONLY this JSON (no markdown, no extra text):
         _save_posted_topic(data.get("topic", ""))
         logger.info(f"Workflow Post generated: {data.get('topic', '')}")
 
-        workflow_detail = data.get("workflow_detail", "")
+        workflow_detail = data.get("workflow_detail") or data.get("workflow_steps") or ""
+        logger.info(f"Workflow detail in response: {len(workflow_detail)} chars")
 
         # Save the full workflow guide to a text file for ManyChat DMs
         if workflow_detail:

@@ -285,18 +285,24 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
         logger.info("Instagram skipped — keys not configured yet")
 
     # 6. Email workflow guide if this is a workflow post
-    if post.post_type == "workflow" and getattr(post, "workflow_detail", ""):
-        try:
-            from utils.email_reporter import send_workflow_guide
-            send_workflow_guide(
-                gmail_user=cfg.gmail_user,
-                gmail_app_password=cfg.gmail_app_password,
-                to_email=cfg.report_email,
-                topic=post.topic,
-                workflow_detail=post.workflow_detail,
-            )
-        except Exception as e:
-            logger.warning(f"Workflow guide email failed: {e}")
+    if post.post_type == "workflow":
+        workflow_detail = getattr(post, "workflow_detail", "")
+        logger.info(f"Workflow detail length: {len(workflow_detail)} chars")
+        if workflow_detail and cfg.gmail_user and cfg.gmail_app_password:
+            try:
+                from utils.email_reporter import send_workflow_guide
+                ok = send_workflow_guide(
+                    gmail_user=cfg.gmail_user,
+                    gmail_app_password=cfg.gmail_app_password,
+                    to_email=cfg.report_email,
+                    topic=post.topic,
+                    workflow_detail=workflow_detail,
+                )
+                logger.info(f"Workflow guide email: {'sent' if ok else 'failed'}")
+            except Exception as e:
+                logger.warning(f"Workflow guide email error: {e}")
+        else:
+            logger.warning(f"Workflow guide email skipped — detail empty: {not workflow_detail}, gmail configured: {bool(cfg.gmail_user)}")
 
     # 7. Log results
     log_post_result(post, results)

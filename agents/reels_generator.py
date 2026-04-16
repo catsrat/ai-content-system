@@ -376,12 +376,15 @@ def generate_reel(
             except Exception:
                 pass
 
-    # Export
+    # Export — use ultrafast preset and low fps to avoid OOM on Railway free tier
     video.write_videofile(
         output_path,
-        fps=24,
+        fps=15,
         codec="libx264",
         audio_codec="aac",
+        preset="ultrafast",
+        threads=1,
+        ffmpeg_params=["-crf", "28"],
         logger=None,
     )
 
