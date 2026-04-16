@@ -3,11 +3,12 @@ reels_generator.py — Generates Instagram Reels automatically.
 
 Format:
 - 9:16 vertical video (1080x1920)
-- Ken Burns zoom effect on background image
-- Text fades in line by line (smooth, not hard cuts)
-- Animated progress bar
-- AI voiceover (ElevenLabs → Edge TTS fallback)
-- 15-30 seconds
+- ONE slide shown at a time (not stacked) — each slide replaces the previous
+- Auto-sized text: always fits the screen, never gets cut off
+- Ken Burns zoom on background
+- Smooth fade-in per slide
+- Slide counter (1/4, 2/4...)
+- AI voiceover + background music
 """
 
 import os
@@ -16,7 +17,7 @@ import requests
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from elevenlabs.client import ElevenLabs
-from moviepy import ImageClip, ImageSequenceClip, AudioFileClip, concatenate_videoclips
+from moviepy import ImageSequenceClip, AudioFileClip, concatenate_videoclips
 from utils.logger import get_logger
 
 logger = get_logger("reels_generator")
@@ -26,9 +27,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
 
-W, H = 1080, 1920  # 9:16 vertical
+W, H = 1080, 1920
 FPS = 15
-FADE_FRAMES = 12  # 0.8s fade-in for each new text line
+FADE_FRAMES = 10  # 0.67s fade-in per slide
 
 THEME_COLORS = {
     "daily_brief":    {"highlight": (0, 180, 255),  "badge": "AI NEWS",    "bg": (5, 10, 30)},
@@ -38,6 +39,13 @@ THEME_COLORS = {
 }
 
 VOICE_ID = "pNInz6obpgDQGcFmaJgB"
+
+HIGHLIGHT_TRIGGERS = [
+    "ai", "openai", "google", "meta", "microsoft", "apple", "nvidia",
+    "billion", "million", "%", "$", "free", "fired", "layoffs", "banned",
+    "breaking", "new", "job", "jobs", "chatgpt", "gpt", "gemini",
+    "claude", "llm", "agent", "agents", "robot", "warning",
+]
 
 
 def _get_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
@@ -68,10 +76,8 @@ def _download_image(url: str):
 
 
 def _make_background(bg_img, bg_color=(10, 15, 40), zoom: float = 1.0) -> Image.Image:
-    """Create 9:16 background with Ken Burns zoom applied."""
     if bg_img:
         iw, ih = bg_img.size
-        # Zoom by cropping a smaller region then scaling up to full size
         crop_w = int(W / zoom)
         crop_h = int(H / zoom)
         scale = max(crop_w / iw, crop_h / ih)
@@ -81,161 +87,37 @@ def _make_background(bg_img, bg_color=(10, 15, 40), zoom: float = 1.0) -> Image.
         top = (new_h - crop_h) // 2
         cropped = resized.crop((left, top, left + crop_w, top + crop_h))
         result = cropped.resize((W, H), Image.BILINEAR)
-        result = ImageEnhance.Brightness(result).enhance(0.32)
-        result = ImageEnhance.Color(result).enhance(0.55)
+        result = ImageEnhance.Brightness(result).enhance(0.30)
+        result = ImageEnhance.Color(result).enhance(0.5)
         return result
     else:
         return Image.new("RGB", (W, H), bg_color)
 
 
 def _ease_in_out(t: float) -> float:
-    """Smooth ease-in-out curve for animations."""
     return t * t * (3 - 2 * t)
 
 
-def _render_frame(
-    text_lines_visible: list,
-    all_lines: list,
-    post_type: str,
-    bg_img,
-    badge_text: str,
-    highlight_color: tuple,
-    zoom: float = 1.0,
-    newest_line_alpha: float = 1.0,   # 0.0–1.0 fade-in for the last revealed line
-    progress: float = 0.0,            # 0.0–1.0 for progress bar
-    bg_color: tuple = (10, 15, 40),
-) -> np.ndarray:
-    """Render one video frame with Ken Burns zoom and text fade-in."""
-    base = _make_background(bg_img, bg_color=bg_color, zoom=zoom)
+def _auto_fit_text(draw, text: str, max_width: int, max_size: int = 180, min_size: int = 50) -> tuple:
+    """Return (font, size) that fits text within max_width."""
+    for size in range(max_size, min_size - 1, -6):
+        font = _get_font(size, bold=True)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        if (bbox[2] - bbox[0]) <= max_width:
+            return font, size
+    return _get_font(min_size, bold=True), min_size
 
-    # Dark gradient overlay — stronger at bottom for text readability
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ov_draw = ImageDraw.Draw(overlay)
-    for y in range(H):
-        t = y / H
-        alpha = int(30 + 200 * (t ** 1.2))
-        ov_draw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
-    # Extra dark band in center for text
-    for y in range(H // 3, 2 * H // 3):
-        ov_draw.line([(0, y), (W, y)], fill=(0, 0, 0, 60))
-    base = base.convert("RGBA")
-    base = Image.alpha_composite(base, overlay)
-    draw = ImageDraw.Draw(base)
 
-    # ── Top badge ───────────────────────────────────────────────
-    badge_font = _get_font(44, bold=True)
-    bbox = draw.textbbox((0, 0), badge_text, font=badge_font)
-    bw = bbox[2] - bbox[0] + 48
-    bh = 68
-    bx = (W - bw) // 2
-    by = 110
-    r = min(34, bw // 2, bh // 2)  # guard: r must not exceed half the pill size
-    hc = highlight_color
-    # Rounded pill background
-    if bx + r < bx + bw - r:
-        draw.rectangle([bx + r, by, bx + bw - r, by + bh], fill=(*hc, 230))
-    if by + r < by + bh - r:
-        draw.rectangle([bx, by + r, bx + bw, by + bh - r], fill=(*hc, 230))
-    draw.ellipse([bx, by, bx + r*2, by + r*2], fill=(*hc, 230))
-    draw.ellipse([bx + bw - r*2, by, bx + bw, by + r*2], fill=(*hc, 230))
-    draw.ellipse([bx, by + bh - r*2, bx + r*2, by + bh], fill=(*hc, 230))
-    draw.ellipse([bx + bw - r*2, by + bh - r*2, bx + bw, by + bh], fill=(*hc, 230))
-    draw.text((bx + 24, by + 12), badge_text, font=badge_font, fill=(255, 255, 255))
-
-    # ── Headline text — center of screen ────────────────────────
-    HIGHLIGHT_TRIGGERS = [
-        "ai", "openai", "google", "meta", "microsoft", "apple", "nvidia",
-        "billion", "million", "%", "$", "fired", "layoffs", "banned",
-        "warning", "breaking", "new", "free", "job", "jobs", "chatgpt",
-        "gpt", "gemini", "claude", "llm", "agent", "agents", "robot",
-    ]
-
-    font_size = 96
+def _wrap_to_lines(text: str, draw, max_width: int, font_size: int) -> list:
+    """Wrap text into lines that each fit within max_width at font_size."""
     font = _get_font(font_size, bold=True)
-    line_h = font_size + 32
-    total_h = len(all_lines) * line_h
-    start_y = (H - total_h) // 2 - 60
-
-    for i, line in enumerate(all_lines):
-        if i >= len(text_lines_visible):
-            break
-
-        # Determine alpha for this line
-        is_newest = (i == len(text_lines_visible) - 1)
-        line_alpha = newest_line_alpha if is_newest else 1.0
-
-        # Slide-up offset for newest line (fades in from 60px below)
-        slide_offset = int(60 * (1.0 - line_alpha)) if is_newest else 0
-
-        words = line.split()
-        full_text = " ".join(words)
-        bbox = draw.textbbox((0, 0), full_text, font=font)
-        total_w = bbox[2] - bbox[0]
-        x = (W - total_w) // 2
-        y = start_y + i * line_h + slide_offset
-
-        for word in words:
-            clean = word.lower().strip(".,!?")
-            is_highlight = any(t in clean for t in HIGHLIGHT_TRIGGERS)
-
-            if is_highlight:
-                color = tuple(int(c * line_alpha) for c in highlight_color)
-            else:
-                v = int(255 * line_alpha)
-                color = (v, v, v)
-
-            shadow_alpha = int(180 * line_alpha)
-            # Shadow
-            draw.text((x + 3, y + 3), word, font=font, fill=(0, 0, 0, shadow_alpha))
-            draw.text((x, y), word, font=font, fill=color)
-
-            w_bbox = draw.textbbox((0, 0), word + " ", font=font)
-            x += w_bbox[2] - w_bbox[0]
-
-    # ── Accent line under last visible text ─────────────────────
-    if text_lines_visible:
-        last_y = start_y + (len(text_lines_visible) - 1) * line_h + font_size + 20
-        bar_w = int(200 * newest_line_alpha)
-        if bar_w > 1:
-            draw.rectangle(
-                [(W - bar_w) // 2, last_y, (W + bar_w) // 2, last_y + 5],
-                fill=(*highlight_color, int(220 * newest_line_alpha))
-            )
-
-    # ── Progress bar at bottom ───────────────────────────────────
-    bar_y = H - 140
-    # Track (background)
-    draw.rectangle([60, bar_y, W - 60, bar_y + 6], fill=(255, 255, 255, 40))
-    # Fill
-    fill_w = int((W - 120) * progress)
-    if fill_w > 0:
-        draw.rectangle([60, bar_y, 60 + fill_w, bar_y + 6], fill=(*highlight_color, 200))
-        # Glow dot at end
-        dot_x = 60 + fill_w
-        draw.ellipse([dot_x - 8, bar_y - 5, dot_x + 8, bar_y + 11], fill=(*highlight_color, 255))
-
-    # ── Brand watermark ──────────────────────────────────────────
-    wm_font = _get_font(38, bold=True)
-    handle = "@AI_TECH_NEWSS"
-    bbox = draw.textbbox((0, 0), handle, font=wm_font)
-    ww = bbox[2] - bbox[0]
-    wh = bbox[3] - bbox[1]
-    wx = (W - ww) // 2
-    wy = H - wh - 52
-    draw.rectangle([wx - 20, wy - 8, wx + ww + 20, wy + wh + 8], fill=(0, 0, 0, 150))
-    draw.text((wx, wy), handle, font=wm_font, fill=(255, 255, 255))
-
-    return np.array(base.convert("RGB"))
-
-
-def _wrap_text(text: str, max_chars: int = 14) -> list:
-    """Wrap text into short lines for video display."""
-    words = text.split()[:12]
+    words = text.split()
     lines = []
     current = ""
     for word in words:
         test = (current + " " + word).strip()
-        if len(test) <= max_chars:
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if (bbox[2] - bbox[0]) <= max_width:
             current = test
         else:
             if current:
@@ -243,13 +125,152 @@ def _wrap_text(text: str, max_chars: int = 14) -> list:
             current = word
     if current:
         lines.append(current)
-    return lines[:4]
+    return lines
 
 
-def _make_animated_clip(
-    text_lines_visible: list,
-    all_lines: list,
-    post_type: str,
+def _render_slide(
+    slide_text: str,
+    slide_idx: int,
+    total_slides: int,
+    bg_img,
+    badge_text: str,
+    highlight_color: tuple,
+    zoom: float = 1.0,
+    alpha: float = 1.0,
+    slide_offset_y: int = 0,
+    bg_color: tuple = (10, 15, 40),
+) -> np.ndarray:
+    """
+    Render ONE slide — text fills the screen, auto-sized, never cut off.
+    Each slide replaces the previous (not stacked).
+    """
+    base = _make_background(bg_img, bg_color=bg_color, zoom=zoom)
+
+    # Gradient overlay
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ov = ImageDraw.Draw(overlay)
+    for y in range(H):
+        t = y / H
+        a = int(15 + 220 * (t ** 1.4))
+        ov.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+    # Extra darkening in text zone
+    for y in range(H // 3, 2 * H // 3 + 200):
+        if 0 <= y < H:
+            ov.line([(0, y), (W, y)], fill=(0, 0, 0, 70))
+
+    base = base.convert("RGBA")
+    base = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(base)
+
+    # ── Badge ────────────────────────────────────────────────────
+    badge_font = _get_font(44, bold=True)
+    bbbox = draw.textbbox((0, 0), badge_text, font=badge_font)
+    bw = bbbox[2] - bbbox[0] + 48
+    bh = 68
+    bx = (W - bw) // 2
+    by = 110
+    r = min(34, bw // 2, bh // 2)
+    hc = highlight_color
+    if bx + r < bx + bw - r:
+        draw.rectangle([bx + r, by, bx + bw - r, by + bh], fill=(*hc, 230))
+    if by + r < by + bh - r:
+        draw.rectangle([bx, by + r, bx + bw, by + bh - r], fill=(*hc, 230))
+    for ex, ey in [(bx, by), (bx+bw-r*2, by), (bx, by+bh-r*2), (bx+bw-r*2, by+bh-r*2)]:
+        draw.ellipse([ex, ey, ex+r*2, ey+r*2], fill=(*hc, 230))
+    draw.text((bx + 24, by + 12), badge_text, font=badge_font, fill=(255, 255, 255))
+
+    # ── Slide counter ─────────────────────────────────────────────
+    ctr_font = _get_font(34, bold=False)
+    ctr = f"{slide_idx + 1}/{total_slides}"
+    cbbox = draw.textbbox((0, 0), ctr, font=ctr_font)
+    draw.text((W - (cbbox[2]-cbbox[0]) - 50, 122), ctr, font=ctr_font,
+              fill=(int(255*alpha), int(255*alpha), int(255*alpha), int(160*alpha)))
+
+    # ── Main text — auto-sized, ONE slide at a time ───────────────
+    MAX_W = W - 80  # 40px padding each side
+
+    # First find the font size that fits the full text on one line
+    temp_img = Image.new("RGB", (10, 10))
+    temp_draw = ImageDraw.Draw(temp_img)
+    font, font_size = _auto_fit_text(temp_draw, slide_text, MAX_W, max_size=200, min_size=60)
+
+    # If font_size is small (long text), wrap into 2 lines at a bigger size
+    if font_size < 90 and len(slide_text.split()) > 3:
+        # Try 2-line layout at larger size
+        two_line_size = min(160, font_size * 2)
+        wrapped = _wrap_to_lines(slide_text, temp_draw, MAX_W, two_line_size)
+        if len(wrapped) <= 3:
+            font_size = two_line_size
+            font = _get_font(font_size, bold=True)
+            lines = wrapped
+        else:
+            lines = [slide_text]
+    else:
+        lines = [slide_text]
+
+    line_h = font_size + 28
+    total_text_h = len(lines) * line_h
+    base_y = (H - total_text_h) // 2 - 20
+
+    for i, line in enumerate(lines):
+        words = line.split()
+        full_line = " ".join(words)
+        lbbox = draw.textbbox((0, 0), full_line, font=font)
+        lw = lbbox[2] - lbbox[0]
+        x = (W - lw) // 2
+        y = base_y + i * line_h + slide_offset_y
+
+        for word in words:
+            clean = word.lower().strip(".,!?$%#@")
+            is_hi = any(t in clean for t in HIGHLIGHT_TRIGGERS)
+
+            if is_hi:
+                color = tuple(int(c * alpha) for c in highlight_color)
+            else:
+                v = int(255 * alpha)
+                color = (v, v, v)
+
+            # Drop shadow
+            draw.text((x + 4, y + 4), word, font=font, fill=(0, 0, 0, int(200 * alpha)))
+            draw.text((x, y), word, font=font, fill=color)
+
+            wbbox = draw.textbbox((0, 0), word + " ", font=font)
+            x += wbbox[2] - wbbox[0]
+
+    # ── Accent bar ────────────────────────────────────────────────
+    acc_y = base_y + total_text_h + 20
+    acc_w = int(200 * alpha)
+    if acc_w > 2:
+        draw.rectangle([(W-acc_w)//2, acc_y, (W+acc_w)//2, acc_y+6],
+                       fill=(*highlight_color, int(220*alpha)))
+
+    # ── Progress bar ──────────────────────────────────────────────
+    pb_y = H - 130
+    progress = (slide_idx + alpha) / max(total_slides, 1)
+    draw.rectangle([60, pb_y, W-60, pb_y+6], fill=(255, 255, 255, 35))
+    fw = int((W - 120) * min(progress, 1.0))
+    if fw > 0:
+        draw.rectangle([60, pb_y, 60+fw, pb_y+6], fill=(*highlight_color, 200))
+        draw.ellipse([60+fw-9, pb_y-6, 60+fw+9, pb_y+12], fill=(*highlight_color, 255))
+
+    # ── Watermark ─────────────────────────────────────────────────
+    wm_font = _get_font(36, bold=True)
+    handle = "@AI_TECH_NEWSS"
+    wbbox = draw.textbbox((0, 0), handle, font=wm_font)
+    ww = wbbox[2] - wbbox[0]
+    wh = wbbox[3] - wbbox[1]
+    wx = (W - ww) // 2
+    wy = H - wh - 46
+    draw.rectangle([wx-18, wy-8, wx+ww+18, wy+wh+8], fill=(0, 0, 0, 160))
+    draw.text((wx, wy), handle, font=wm_font, fill=(255, 255, 255))
+
+    return np.array(base.convert("RGB"))
+
+
+def _make_slide_clip(
+    slide_text: str,
+    slide_idx: int,
+    total_slides: int,
     bg_img,
     badge_text: str,
     highlight_color: tuple,
@@ -259,38 +280,32 @@ def _make_animated_clip(
     bg_color: tuple,
     fade_in: bool = True,
 ):
-    """
-    Generate an animated clip with Ken Burns zoom + text fade-in.
-    Uses ImageSequenceClip — requires Railway Hobby plan (8GB RAM).
-    """
+    """Generate animated frames for ONE slide (Ken Burns + fade-in)."""
     n_frames = max(1, int(duration * FPS))
     frames = []
 
     for i in range(n_frames):
         global_t = min((time_start + i / FPS) / max(total_duration, 1), 1.0)
-
-        # Ken Burns: background zooms 1.0 → 1.18 across full reel (clearly visible)
         zoom = 1.0 + 0.18 * _ease_in_out(global_t)
 
-        # Progress bar
-        prog = global_t
-
-        # Text fade-in for newest line (first FADE_FRAMES frames)
         if fade_in and i < FADE_FRAMES:
-            newest_alpha = min(1.0, _ease_in_out(i / max(FADE_FRAMES - 1, 1)))
+            raw = i / max(FADE_FRAMES - 1, 1)
+            alpha = min(1.0, _ease_in_out(raw))
+            offset_y = int(50 * (1.0 - alpha))
         else:
-            newest_alpha = 1.0
+            alpha = 1.0
+            offset_y = 0
 
-        frame = _render_frame(
-            text_lines_visible=text_lines_visible,
-            all_lines=all_lines,
-            post_type=post_type,
+        frame = _render_slide(
+            slide_text=slide_text,
+            slide_idx=slide_idx,
+            total_slides=total_slides,
             bg_img=bg_img,
             badge_text=badge_text,
             highlight_color=highlight_color,
             zoom=zoom,
-            newest_line_alpha=newest_alpha,
-            progress=prog,
+            alpha=alpha,
+            slide_offset_y=offset_y,
             bg_color=bg_color,
         )
         frames.append(frame)
@@ -299,7 +314,6 @@ def _make_animated_clip(
 
 
 def _generate_voiceover_edge_tts(text: str, output_path: str) -> bool:
-    """Generate voiceover using Microsoft Edge TTS (free, no API key)."""
     try:
         import asyncio
         import edge_tts
@@ -322,7 +336,6 @@ def _generate_voiceover_edge_tts(text: str, output_path: str) -> bool:
 
 
 def generate_voiceover(text: str, api_key: str, output_path: str) -> bool:
-    """Try ElevenLabs first, fall back to Edge TTS."""
     if api_key:
         try:
             client = ElevenLabs(api_key=api_key)
@@ -363,12 +376,19 @@ def generate_reel(
 
     bg_img = _download_image(background_image_url)
 
-    # Use Claude-generated slides if available, else fall back to wrapped headline
+    # Use Claude-generated slides if available, else split headline into words
     if slides and len(slides) >= 2:
-        lines = [s.strip().upper() for s in slides[:5] if s.strip()]
+        slide_texts = [s.strip().upper() for s in slides[:5] if s.strip()]
     else:
-        lines = _wrap_text(headline, max_chars=14)
-    n_lines = len(lines)
+        # Fallback: split headline into 2-word chunks
+        words = headline.upper().split()
+        slide_texts = []
+        for i in range(0, len(words), 2):
+            slide_texts.append(" ".join(words[i:i+2]))
+        slide_texts = slide_texts[:4]
+
+    n_slides = len(slide_texts)
+    logger.info(f"Reel slides: {slide_texts}")
 
     # Generate voiceover
     audio_path = output_path.replace(".mp4", "_audio.mp3")
@@ -388,11 +408,10 @@ def generate_reel(
     except Exception as e:
         logger.warning(f"Music generation failed: {e}")
 
-    # Calculate total video duration
-    seconds_per_line = 1.4
+    # Timings
+    seconds_per_slide = 2.0
     hold_duration = 3.0
 
-    # If audio available, match video length to audio
     audio_duration = 0
     if has_audio:
         try:
@@ -400,19 +419,20 @@ def generate_reel(
         except Exception:
             pass
 
-    text_duration = n_lines * seconds_per_line + hold_duration
+    text_duration = n_slides * seconds_per_slide + hold_duration
     total_duration = max(text_duration, audio_duration) if audio_duration else text_duration
 
-    # ── Build animated clips (Ken Burns + text fade-in) ──────────
+    # Build clips — ONE slide per clip, shown independently
     clips = []
     time_cursor = 0.0
 
-    for i in range(1, n_lines + 1):
-        duration = seconds_per_line if i < n_lines else hold_duration
-        clip = _make_animated_clip(
-            text_lines_visible=lines[:i],
-            all_lines=lines,
-            post_type=post_type,
+    for i, slide_text in enumerate(slide_texts):
+        is_last = (i == n_slides - 1)
+        duration = hold_duration if is_last else seconds_per_slide
+        clip = _make_slide_clip(
+            slide_text=slide_text,
+            slide_idx=i,
+            total_slides=n_slides,
             bg_img=bg_img,
             badge_text=badge,
             highlight_color=highlight,
@@ -425,13 +445,13 @@ def generate_reel(
         clips.append(clip)
         time_cursor += duration
 
-    # Hold final frame for remaining audio duration
+    # Extend last slide if audio is longer
     if audio_duration > time_cursor:
         remaining = audio_duration - time_cursor
-        clip = _make_animated_clip(
-            text_lines_visible=lines,
-            all_lines=lines,
-            post_type=post_type,
+        clip = _make_slide_clip(
+            slide_text=slide_texts[-1],
+            slide_idx=n_slides - 1,
+            total_slides=n_slides,
             bg_img=bg_img,
             badge_text=badge,
             highlight_color=highlight,
@@ -449,21 +469,15 @@ def generate_reel(
     try:
         from moviepy import CompositeAudioClip
         audio_clips = []
-
         if has_audio:
-            voiceover = AudioFileClip(audio_path)
-            audio_clips.append(voiceover)
-
+            audio_clips.append(AudioFileClip(audio_path))
         if has_music and os.path.exists(music_path):
             music = AudioFileClip(music_path)
             music = music.subclipped(0, min(music.duration, video.duration))
             music = music.with_volume_scaled(0.18)
             audio_clips.append(music)
-
         if audio_clips:
-            mixed = CompositeAudioClip(audio_clips)
-            video = video.with_audio(mixed)
-
+            video = video.with_audio(CompositeAudioClip(audio_clips))
     except Exception as e:
         logger.warning(f"Audio mixing failed: {e}")
         if has_audio:
@@ -472,7 +486,6 @@ def generate_reel(
             except Exception:
                 pass
 
-    # Export
     video.write_videofile(
         output_path,
         fps=FPS,
@@ -484,7 +497,6 @@ def generate_reel(
         logger=None,
     )
 
-    # Cleanup temp files
     for path in [audio_path, music_path]:
         if os.path.exists(path):
             os.remove(path)
