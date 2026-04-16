@@ -140,24 +140,48 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
     image_filename = f"{post_type}_{timestamp}.png"
     local_image_path = None
     public_image_url = None
+    local_carousel_paths = []
+    public_carousel_urls = []
 
+    unsplash_key = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+    bg_url = next((a.get("image_url", "") for a in articles if a.get("image_url")), "")
+
+    # 3a. Generate Twitter image (single square)
     try:
-        # Use the first article's image as background
-        bg_url = next((a.get("image_url", "") for a in articles if a.get("image_url")), "")
+        from agents.image_generator import generate_post_image
         local_image_path = generate_post_image(
             post_type=post.post_type,
             headline=post.key_message,
             brand_name=cfg.brand_name,
             filename=image_filename,
             background_image_url=bg_url,
+            topic=post.topic,
+            unsplash_access_key=unsplash_key,
         )
         logger.info(f"Image saved: {local_image_path}")
     except Exception as e:
         logger.warning(f"Image generation failed: {e}. Posting without image.")
 
-    # 3b. Generate Reel
+    # 3b. Generate Instagram carousel (4 slides with real Unsplash photos)
+    if post.carousel_slides:
+        try:
+            from agents.image_generator import generate_carousel_images
+            local_carousel_paths = generate_carousel_images(
+                post_type=post.post_type,
+                carousel_texts=post.carousel_slides,
+                topic=post.topic,
+                brand_name=cfg.brand_name,
+                base_filename=f"{post_type}_{timestamp}",
+                background_image_url=bg_url,
+                unsplash_access_key=unsplash_key,
+            )
+            logger.info(f"Carousel: {len(local_carousel_paths)} slides generated")
+        except Exception as e:
+            logger.warning(f"Carousel generation failed: {e}")
+
+    # 3c. Generate Reel
     local_reel_path = None
-    if post.reel_script and cfg.elevenlabs_api_key:
+    if post.reel_script:
         logger.info("Generating Reel with voiceover...")
         try:
             reel_filename = f"{post_type}_{timestamp}.mp4"
@@ -175,9 +199,10 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
         except Exception as e:
             logger.warning(f"Reel generation failed: {e}")
 
-    # 4. Upload to Cloudinary (needed for Instagram)
+    # 4. Upload to Cloudinary
     public_reel_url = None
-    if local_image_path or local_reel_path:
+    has_content = local_image_path or local_reel_path or local_carousel_paths
+    if has_content:
         try:
             init_cloudinary(
                 cloud_name=cfg.cloudinary_cloud_name,
@@ -193,6 +218,14 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
             logger.info(f"Image uploaded to Cloudinary: {public_image_url}")
         except Exception as e:
             logger.warning(f"Cloudinary image upload failed: {e}")
+
+    for cp in local_carousel_paths:
+        try:
+            url = upload_image(cp, folder="ai-content/carousel")
+            public_carousel_urls.append(url)
+            logger.info(f"Carousel slide uploaded: {url}")
+        except Exception as e:
+            logger.warning(f"Carousel slide upload failed: {e}")
 
     if local_reel_path:
         try:
@@ -251,7 +284,7 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
             business_account_id=cfg.instagram_business_account_id,
         )
 
-        # Post Reel if available (higher reach than images)
+        # 1. Post Reel (highest reach)
         if public_reel_url:
             logger.info("Publishing Reel to Instagram...")
             try:
@@ -265,9 +298,22 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
                 logger.error(f"Instagram Reel error: {e}")
                 results.append({"success": False, "platform": "instagram", "error": str(e)})
 
-        # Also post image (or as fallback if no reel)
-        if public_image_url:
-            logger.info("Publishing image to Instagram...")
+        # 2. Post carousel (4 swipeable slides)
+        if public_carousel_urls:
+            logger.info(f"Publishing carousel ({len(public_carousel_urls)} slides) to Instagram...")
+            try:
+                result = instagram.publish(
+                    caption=caption,
+                    image_urls=public_carousel_urls,
+                )
+                results.append(result)
+                logger.info(f"Instagram carousel: {'OK' if result['success'] else 'FAILED'}")
+            except Exception as e:
+                logger.error(f"Instagram carousel error: {e}")
+                results.append({"success": False, "platform": "instagram", "error": str(e)})
+        elif not public_reel_url and public_image_url:
+            # Fallback: single image if no reel and no carousel
+            logger.info("Publishing single image to Instagram (fallback)...")
             try:
                 result = instagram.publish(
                     caption=caption,

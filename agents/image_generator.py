@@ -1,18 +1,18 @@
 """
-image_generator.py — Generates organic news-style social media images.
+image_generator.py — Generates high-quality carousel slides using real Unsplash photos.
 
-Style inspired by high-engagement AI news accounts:
-- Real news image as background
-- Dark gradient overlay
-- Bold white headline with colored keyword highlights
+Style: uncover.ai inspired
+- Real topic-relevant photo as full background
+- Clean dark gradient overlay
+- Bold white text, minimal clutter
 - Brand watermark
-- Source tag
+- 4 carousel slides per post (swipeable)
 """
 
 import os
 import io
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from utils.logger import get_logger
 
 logger = get_logger("image_generator")
@@ -20,116 +20,141 @@ logger = get_logger("image_generator")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output", "images")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Fallback background colors if no image available
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
+
 THEME_COLORS = {
-    "daily_brief":    {"bg": (10, 15, 40),   "highlight": (0, 180, 255),  "badge": "📰 AI NEWS"},
-    "learning":       {"bg": (10, 30, 15),   "highlight": (0, 220, 100),  "badge": "🧠 LEARN NOW"},
-    "differentiator": {"bg": (35, 10, 10),   "highlight": (255, 80, 30),  "badge": "🔥 HOT TAKE"},
-    "workflow":       {"bg": (20, 10, 35),   "highlight": (180, 80, 255), "badge": "⚡ FREE TOOL"},
+    "daily_brief":    {"highlight": (0, 180, 255),   "badge": "AI NEWS",    "emoji": "📰"},
+    "learning":       {"highlight": (0, 220, 120),   "badge": "LEARN THIS", "emoji": "🧠"},
+    "differentiator": {"highlight": (255, 80, 30),   "badge": "HOT TAKE",   "emoji": "🔥"},
+    "workflow":       {"highlight": (180, 80, 255),  "badge": "FREE TOOL",  "emoji": "⚡"},
 }
 
-# Words to auto-highlight in headlines
-HIGHLIGHT_TRIGGERS = [
-    "ai", "openai", "google", "meta", "microsoft", "apple", "nvidia",
-    "billion", "million", "trillion", "%", "$", "fired", "layoffs",
-    "banned", "dead", "warning", "urgent", "breaking", "first", "new",
-    "free", "job", "jobs", "salary", "career", "robot", "chatgpt",
-    "gpt", "gemini", "claude", "llm", "agent", "agents",
-]
-
-
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
+# Instagram carousel size (4:5 portrait — best reach)
+W, H = 1080, 1350
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    # Bundled fonts (work on all platforms including Railway/Linux)
-    bundled_paths = [
-        os.path.join(ASSETS_DIR, "Montserrat-Bold.ttf" if bold else "Montserrat-Regular.ttf"),
-    ]
-    # System font fallbacks
-    system_paths_bold = [
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Impact.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
+    bundled = os.path.join(ASSETS_DIR, "Montserrat-Bold.ttf" if bold else "Montserrat-Regular.ttf")
+    fallbacks_bold = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     ]
-    system_paths_regular = [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
+    fallbacks_reg = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
     ]
-    all_paths = bundled_paths + (system_paths_bold if bold else system_paths_regular)
-    for path in all_paths:
-        if os.path.exists(path):
+    paths = [bundled] + (fallbacks_bold if bold else fallbacks_reg)
+    for p in paths:
+        if os.path.exists(p):
             try:
-                font = ImageFont.truetype(path, size)
-                logger.info(f"Using font: {path} size={size}")
-                return font
+                return ImageFont.truetype(p, size)
             except Exception:
                 continue
-    logger.warning(f"No font found — using default (text will be tiny!)")
     return ImageFont.load_default()
 
 
-def _download_image(url: str) -> object:
-    """Download and return a PIL Image from URL."""
+def _fetch_unsplash_photo(topic: str, access_key: str) -> Image.Image | None:
+    """Fetch a high-quality relevant photo from Unsplash."""
+    if not access_key:
+        return None
+    try:
+        # Extract clean keywords from topic
+        stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+                      "of", "with", "by", "from", "use", "using", "how", "why", "what", "is"}
+        keywords = [w.lower() for w in topic.split() if w.lower() not in stop_words][:3]
+        query = " ".join(keywords) + " technology"
+
+        resp = requests.get(
+            "https://api.unsplash.com/search/photos",
+            params={
+                "query": query,
+                "per_page": 5,
+                "orientation": "portrait",
+                "content_filter": "high",
+            },
+            headers={"Authorization": f"Client-ID {access_key}"},
+            timeout=10,
+        )
+        if not resp.ok:
+            logger.warning(f"Unsplash API error: {resp.status_code}")
+            return None
+
+        results = resp.json().get("results", [])
+        if not results:
+            # Fallback: search just "AI technology"
+            resp2 = requests.get(
+                "https://api.unsplash.com/search/photos",
+                params={"query": "artificial intelligence technology", "per_page": 5, "orientation": "portrait"},
+                headers={"Authorization": f"Client-ID {access_key}"},
+                timeout=10,
+            )
+            results = resp2.json().get("results", []) if resp2.ok else []
+
+        if results:
+            photo_url = results[0]["urls"]["regular"]
+            img_resp = requests.get(photo_url, timeout=15)
+            img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+            logger.info(f"Unsplash photo fetched for: {query}")
+            return img
+
+    except Exception as e:
+        logger.warning(f"Unsplash fetch failed: {e}")
+    return None
+
+
+def _download_image(url: str) -> Image.Image | None:
     if not url:
         return None
     try:
         resp = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         return Image.open(io.BytesIO(resp.content)).convert("RGB")
-    except Exception as e:
-        logger.warning(f"Could not download image from {url}: {e}")
+    except Exception:
         return None
 
 
-def _make_background(img: object, bg_color: tuple, size: tuple) -> Image.Image:
-    """Prepare background: use downloaded image or solid color, cropped to square."""
-    W, H = size
-
+def _prepare_background(img: Image.Image | None, theme_color: tuple) -> Image.Image:
+    """Crop photo to canvas size with dark overlay, or use gradient fallback."""
     if img:
-        # Crop to square (center crop)
+        # Center crop to canvas
         iw, ih = img.size
         scale = max(W / iw, H / ih)
-        new_w, new_h = int(iw * scale), int(ih * scale)
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-        left = (new_w - W) // 2
-        top = (new_h - H) // 2
+        nw, nh = int(iw * scale), int(ih * scale)
+        img = img.resize((nw, nh), Image.LANCZOS)
+        left = (nw - W) // 2
+        top = (nh - H) // 2
         img = img.crop((left, top, left + W, top + H))
-
-        # Darken + desaturate slightly for text readability
-        img = ImageEnhance.Brightness(img).enhance(0.45)
-        img = ImageEnhance.Color(img).enhance(0.7)
+        # Darken for text readability
+        img = ImageEnhance.Brightness(img).enhance(0.40)
+        img = ImageEnhance.Color(img).enhance(0.65)
         return img
     else:
-        # Solid dark background
-        bg = Image.new("RGB", (W, H), bg_color)
+        # Gradient fallback
+        bg = Image.new("RGB", (W, H), (8, 10, 25))
         return bg
 
 
-def _draw_gradient_overlay(draw: ImageDraw, W: int, H: int):
-    """Draw dark gradient overlay for text readability."""
+def _draw_gradient(overlay_draw: ImageDraw, slide_idx: int):
+    """Draw gradient overlay — heavier at bottom for text area."""
     for y in range(H):
         t = y / H
-        alpha = int(60 + 160 * (t ** 1.2))
-        draw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
+        # Strong bottom gradient
+        alpha = int(20 + 200 * (t ** 1.5))
+        overlay_draw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
 
 
-def _wrap_headline(headline: str, max_chars_per_line: int = 12) -> list[str]:
-    """Wrap headline into lines, keeping important words together.
-    Truncates to max 4 words per line, max 3 lines for big bold text."""
-    # Trim headline to max 8 words for impact
-    words = headline.split()[:8]
+def _auto_wrap(draw: ImageDraw, text: str, font: ImageFont.FreeTypeFont,
+               max_width: int) -> list[str]:
+    """Wrap text to fit within max_width."""
+    words = text.split()
     lines = []
     current = ""
     for word in words:
         test = (current + " " + word).strip()
-        if len(test) <= max_chars_per_line:
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if bbox[2] - bbox[0] <= max_width:
             current = test
         else:
             if current:
@@ -137,47 +162,194 @@ def _wrap_headline(headline: str, max_chars_per_line: int = 12) -> list[str]:
             current = word
     if current:
         lines.append(current)
-    return lines[:3]
+    return lines
 
 
-def _draw_highlighted_text(draw, lines, start_y, line_h, font_size, highlight_color, W):
-    """Draw headline with auto-highlighted keywords."""
-    font_bold = _get_font(font_size, bold=True)
-
-    for i, line in enumerate(lines):
-        words = line.split()
-        # Calculate total line width first
-        full_text = " ".join(words)
-        bbox = draw.textbbox((0, 0), full_text, font=font_bold)
-        total_w = bbox[2] - bbox[0]
-        x = (W - total_w) // 2
-        y = start_y + i * line_h
-
-        # Draw word by word
-        for j, word in enumerate(words):
-            clean = word.lower().strip(".,!?")
-            is_highlight = any(t in clean for t in HIGHLIGHT_TRIGGERS)
-            color = highlight_color if is_highlight else (255, 255, 255)
-
-            # Shadow
-            shadow_offset = 3
-            draw.text((x + shadow_offset, y + shadow_offset), word, font=font_bold, fill=(0, 0, 0, 180))
-            # Main
-            draw.text((x, y), word, font=font_bold, fill=color)
-
-            # Advance x
-            w_bbox = draw.textbbox((0, 0), word + " ", font=font_bold)
-            x += w_bbox[2] - w_bbox[0]
+def _auto_fit_text(draw: ImageDraw, text: str, max_width: int,
+                   max_size: int = 100, min_size: int = 36) -> tuple:
+    """Find largest font size where text fits within max_width."""
+    for size in range(max_size, min_size - 1, -4):
+        font = _get_font(size, bold=True)
+        lines = _auto_wrap(draw, text, font, max_width)
+        # Accept if fits in 3 lines max
+        if len(lines) <= 3:
+            return font, size, lines
+    font = _get_font(min_size, bold=True)
+    lines = _auto_wrap(draw, text, font, max_width)
+    return font, min_size, lines
 
 
-def _draw_rounded_rect(draw, x1, y1, x2, y2, r, fill):
+def _draw_rounded_rect(draw: ImageDraw, x1, y1, x2, y2, r, fill):
+    if x2 <= x1 or y2 <= y1:
+        return
     r = min(r, (x2 - x1) // 2, (y2 - y1) // 2)
     draw.rectangle([x1 + r, y1, x2 - r, y2], fill=fill)
     draw.rectangle([x1, y1 + r, x2, y2 - r], fill=fill)
-    draw.ellipse([x1, y1, x1 + r*2, y1 + r*2], fill=fill)
-    draw.ellipse([x2 - r*2, y1, x2, y1 + r*2], fill=fill)
-    draw.ellipse([x1, y2 - r*2, x1 + r*2, y2], fill=fill)
-    draw.ellipse([x2 - r*2, y2 - r*2, x2, y2], fill=fill)
+    draw.ellipse([x1, y1, x1 + r * 2, y1 + r * 2], fill=fill)
+    draw.ellipse([x2 - r * 2, y1, x2, y1 + r * 2], fill=fill)
+    draw.ellipse([x1, y2 - r * 2, x1 + r * 2, y2], fill=fill)
+    draw.ellipse([x2 - r * 2, y2 - r * 2, x2, y2], fill=fill)
+
+
+def _render_slide(
+    slide_text: str,
+    slide_idx: int,
+    total_slides: int,
+    bg: Image.Image,
+    highlight: tuple,
+    badge_text: str,
+    emoji: str,
+    brand_name: str,
+    is_cover: bool = False,
+    is_cta: bool = False,
+) -> Image.Image:
+    """Render one carousel slide."""
+    base = bg.copy().convert("RGBA")
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ov_draw = ImageDraw.Draw(overlay)
+    _draw_gradient(ov_draw, slide_idx)
+    base = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(base)
+
+    PADDING = 60
+    max_text_w = W - PADDING * 2
+
+    # ── Top bar: badge (left) + slide counter (right) ──────
+    badge_font = _get_font(26, bold=True)
+    badge_full = f"{emoji} {badge_text}"
+    bb = draw.textbbox((0, 0), badge_full, font=badge_font)
+    bw, bh = bb[2] - bb[0] + 32, bb[3] - bb[1] + 16
+    _draw_rounded_rect(draw, PADDING, 50, PADDING + bw, 50 + bh, 10, (*highlight, 220))
+    draw.text((PADDING + 16, 58), badge_full, font=badge_font, fill=(255, 255, 255))
+
+    # Slide counter pill (top right)
+    counter_font = _get_font(24, bold=True)
+    counter_text = f"{slide_idx + 1} / {total_slides}"
+    cb = draw.textbbox((0, 0), counter_text, font=counter_font)
+    cw = cb[2] - cb[0] + 28
+    cx = W - PADDING - cw
+    _draw_rounded_rect(draw, cx, 50, cx + cw, 50 + bh, 10, (255, 255, 255, 40))
+    draw.text((cx + 14, 58), counter_text, font=counter_font, fill=(255, 255, 255, 200))
+
+    # ── Main text (lower 40% of image) ─────────────────────
+    text_zone_top = int(H * 0.52)
+
+    if is_cover:
+        # Cover slide: very large headline
+        font, size, lines = _auto_fit_text(draw, slide_text, max_text_w, max_size=110, min_size=52)
+    elif is_cta:
+        # CTA slide: medium text + follow prompt
+        font, size, lines = _auto_fit_text(draw, slide_text, max_text_w, max_size=72, min_size=40)
+    else:
+        # Content slide: medium text
+        font, size, lines = _auto_fit_text(draw, slide_text, max_text_w, max_size=72, min_size=36)
+
+    line_h = size + 18
+    total_text_h = len(lines) * line_h
+    text_y = text_zone_top + (H - text_zone_top - total_text_h - 120) // 2
+
+    for i, line in enumerate(lines):
+        lb = draw.textbbox((0, 0), line, font=font)
+        lw = lb[2] - lb[0]
+        lx = (W - lw) // 2
+        ly = text_y + i * line_h
+        # Shadow
+        draw.text((lx + 3, ly + 3), line, font=font, fill=(0, 0, 0, 160))
+        # Main text
+        draw.text((lx, ly), line, font=font, fill=(255, 255, 255))
+
+    # Accent line under text
+    line_y = text_y + total_text_h + 20
+    draw.rectangle([(W - 80) // 2, line_y, (W + 80) // 2, line_y + 4], fill=(*highlight, 200))
+
+    # CTA slide: swipe arrow hint
+    if is_cta:
+        cta_font = _get_font(30, bold=True)
+        follow_text = f"Follow @{brand_name} for daily AI updates"
+        fb = draw.textbbox((0, 0), follow_text, font=cta_font)
+        fw = fb[2] - fb[0]
+        draw.text(((W - fw) // 2, line_y + 30), follow_text, font=cta_font, fill=(*highlight, 220))
+    elif slide_idx < total_slides - 1:
+        # Swipe hint on non-last slides
+        swipe_font = _get_font(24, bold=False)
+        swipe_text = "swipe →"
+        sb = draw.textbbox((0, 0), swipe_text, font=swipe_font)
+        sw = sb[2] - sb[0]
+        draw.text(((W - sw) // 2, line_y + 30), swipe_text, font=swipe_font, fill=(255, 255, 255, 120))
+
+    # ── Brand watermark (bottom) ────────────────────────────
+    wm_font = _get_font(28, bold=True)
+    handle = f"@{brand_name}"
+    wb = draw.textbbox((0, 0), handle, font=wm_font)
+    ww = wb[2] - wb[0]
+    wx = (W - ww) // 2
+    wy = H - 55
+    draw.text((wx + 2, wy + 2), handle, font=wm_font, fill=(0, 0, 0, 140))
+    draw.text((wx, wy), handle, font=wm_font, fill=(255, 255, 255, 180))
+
+    # Bottom accent line
+    for i in range(5):
+        draw.line([(0, H - 5 + i), (W, H - 5 + i)], fill=(*highlight, 180 - i * 30))
+
+    return base.convert("RGB")
+
+
+def generate_carousel_images(
+    post_type: str,
+    carousel_texts: list[str],
+    topic: str = "",
+    brand_name: str = "AI_TECH_NEWSS",
+    base_filename: str = "carousel",
+    background_image_url: str = None,
+    unsplash_access_key: str = "",
+) -> list[str]:
+    """
+    Generate 4 carousel slide images for Instagram.
+    carousel_texts: list of 4 slide texts [hook, point1, point2, cta]
+    Returns list of file paths.
+    """
+    theme = THEME_COLORS.get(post_type, THEME_COLORS["daily_brief"])
+    highlight = theme["highlight"]
+
+    # Fetch photo: try Unsplash first, then article image, then None
+    photo = None
+    if unsplash_access_key and topic:
+        photo = _fetch_unsplash_photo(topic, unsplash_access_key)
+    if photo is None and background_image_url:
+        photo = _download_image(background_image_url)
+
+    bg = _prepare_background(photo, highlight)
+
+    # Ensure we have exactly 4 slides
+    texts = list(carousel_texts)
+    while len(texts) < 4:
+        texts.append(f"Follow @{brand_name} for daily AI updates")
+    texts = texts[:4]
+
+    paths = []
+    total = len(texts)
+    for i, text in enumerate(texts):
+        is_cover = (i == 0)
+        is_cta = (i == total - 1)
+        slide = _render_slide(
+            slide_text=text,
+            slide_idx=i,
+            total_slides=total,
+            bg=bg,
+            highlight=highlight,
+            badge_text=theme["badge"],
+            emoji=theme["emoji"],
+            brand_name=brand_name,
+            is_cover=is_cover,
+            is_cta=is_cta,
+        )
+        fname = f"{base_filename}_slide_{i + 1}.png"
+        fpath = os.path.join(OUTPUT_DIR, fname)
+        slide.save(fpath, "PNG", quality=95)
+        logger.info(f"Carousel slide {i+1}/{total} saved: {fpath}")
+        paths.append(fpath)
+
+    return paths
 
 
 def generate_post_image(
@@ -186,92 +358,46 @@ def generate_post_image(
     brand_name: str = "AI_TECH_NEWSS",
     filename: str = None,
     background_image_url: str = None,
+    topic: str = "",
+    unsplash_access_key: str = "",
 ) -> str:
+    """
+    Generate a single image (used for Twitter).
+    Uses 1080x1080 square format.
+    """
+    # Temporarily override canvas to square for Twitter
+    global W, H
+    orig_W, orig_H = W, H
     W, H = 1080, 1080
+
     theme = THEME_COLORS.get(post_type, THEME_COLORS["daily_brief"])
-    highlight = theme["highlight"]
 
-    # ── 1. Background ───────────────────────────────────────
-    bg_img = _download_image(background_image_url)
-    base = _make_background(bg_img, theme["bg"], (W, H))
+    photo = None
+    if unsplash_access_key and topic:
+        photo = _fetch_unsplash_photo(topic, unsplash_access_key)
+    if photo is None and background_image_url:
+        photo = _download_image(background_image_url)
 
-    # ── 2. Gradient overlay (RGBA) ──────────────────────────
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ov_draw = ImageDraw.Draw(overlay)
-    _draw_gradient_overlay(ov_draw, W, H)
-    base = base.convert("RGBA")
-    base = Image.alpha_composite(base, overlay)
-    draw = ImageDraw.Draw(base)
+    bg = _prepare_background(photo, theme["highlight"])
 
-    # ── 3. Top source badge ─────────────────────────────────
-    badge_font = _get_font(28, bold=True)
-    badge_text = theme["badge"]
-    bbox = draw.textbbox((0, 0), badge_text, font=badge_font)
-    bw = bbox[2] - bbox[0] + 32
-    bh = 52
-    _draw_rounded_rect(draw, 40, 40, 40 + bw, 40 + bh, 12, (*highlight, 230))
-    draw.text((56, 51), badge_text, font=badge_font, fill=(255, 255, 255))
+    slide = _render_slide(
+        slide_text=headline,
+        slide_idx=0,
+        total_slides=1,
+        bg=bg,
+        highlight=theme["highlight"],
+        badge_text=theme["badge"],
+        emoji=theme["emoji"],
+        brand_name=brand_name,
+        is_cover=True,
+        is_cta=False,
+    )
 
-    # ── 4. Headline text (center of image) ─────────────────
-    lines = _wrap_headline(headline, max_chars_per_line=12)
-    n = len(lines)
-    font_size = 130 if n == 1 else (110 if n == 2 else 90)
-    line_h = font_size + 24
-    total_h = n * line_h
-    start_y = (H - total_h) // 2 - 40
+    W, H = orig_W, orig_H  # restore
 
-    _draw_highlighted_text(draw, lines, start_y, line_h, font_size, highlight, W)
-
-    # ── 5. Accent bar under headline ────────────────────────
-    bar_y = start_y + total_h + 20
-    bar_w = 120
-    draw.rectangle([(W - bar_w) // 2, bar_y, (W + bar_w) // 2, bar_y + 5], fill=highlight)
-
-    # ── 6. Brand watermark (bottom right) ──────────────────
-    wm_font = _get_font(32, bold=True)
-    handle = f"@{brand_name}"
-    bbox = draw.textbbox((0, 0), handle, font=wm_font)
-    ww = bbox[2] - bbox[0]
-    wh = bbox[3] - bbox[1]
-    wx = W - ww - 40
-    wy = H - wh - 40
-    # Semi-transparent pill behind watermark
-    _draw_rounded_rect(draw, wx - 14, wy - 8, wx + ww + 14, wy + wh + 8, 10, (0, 0, 0, 160))
-    draw.text((wx, wy), handle, font=wm_font, fill=(255, 255, 255))
-
-    # ── 7. Thin accent line at very bottom ─────────────────
-    for i in range(6):
-        draw.line([(0, H - 6 + i), (W, H - 6 + i)], fill=(*highlight, 200 - i * 30))
-
-    # Save
-    final = base.convert("RGB")
     if not filename:
         filename = f"{post_type}_image.png"
-    filepath = os.path.join(OUTPUT_DIR, filename)
-    final.save(filepath, "PNG", quality=95)
-    logger.info(f"Image saved: {filepath}")
-    return filepath
-
-
-def generate_carousel_slides(
-    post_type: str,
-    slides: list[str],
-    brand_name: str = "AI_TECH_NEWSS",
-    base_filename: str = "carousel",
-    background_image_url: str = None,
-) -> list[str]:
-    paths = []
-    for i, text in enumerate(slides[:10]):
-        fname = f"{base_filename}_slide_{i + 1}.png"
-        try:
-            path = generate_post_image(
-                post_type=post_type,
-                headline=text,
-                brand_name=brand_name,
-                filename=fname,
-                background_image_url=background_image_url,
-            )
-            paths.append(path)
-        except Exception as e:
-            logger.error(f"Slide {i+1} failed: {e}")
-    return paths
+    fpath = os.path.join(OUTPUT_DIR, filename)
+    slide.save(fpath, "PNG", quality=95)
+    logger.info(f"Image saved: {fpath}")
+    return fpath
