@@ -16,7 +16,7 @@ import requests
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from elevenlabs.client import ElevenLabs
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
+from moviepy import ImageClip, ImageSequenceClip, AudioFileClip, concatenate_videoclips
 from utils.logger import get_logger
 
 logger = get_logger("reels_generator")
@@ -246,7 +246,7 @@ def _wrap_text(text: str, max_chars: int = 14) -> list:
     return lines[:4]
 
 
-def _make_static_clip(
+def _make_animated_clip(
     text_lines_visible: list,
     all_lines: list,
     post_type: str,
@@ -254,26 +254,48 @@ def _make_static_clip(
     badge_text: str,
     highlight_color: tuple,
     duration: float,
-    progress: float,
+    time_start: float,
+    total_duration: float,
     bg_color: tuple,
-) -> ImageClip:
+    fade_in: bool = True,
+):
     """
-    Render ONE frame and hold it for `duration` seconds.
-    Uses ImageClip (not ImageSequenceClip) to keep memory ~6MB per clip.
+    Generate an animated clip with Ken Burns zoom + text fade-in.
+    Uses ImageSequenceClip — requires Railway Hobby plan (8GB RAM).
     """
-    frame = _render_frame(
-        text_lines_visible=text_lines_visible,
-        all_lines=all_lines,
-        post_type=post_type,
-        bg_img=bg_img,
-        badge_text=badge_text,
-        highlight_color=highlight_color,
-        zoom=1.0,
-        newest_line_alpha=1.0,
-        progress=progress,
-        bg_color=bg_color,
-    )
-    return ImageClip(frame, duration=duration)
+    n_frames = max(1, int(duration * FPS))
+    frames = []
+
+    for i in range(n_frames):
+        global_t = min((time_start + i / FPS) / max(total_duration, 1), 1.0)
+
+        # Ken Burns: background slowly zooms 1.0 → 1.07 across full reel
+        zoom = 1.0 + 0.07 * _ease_in_out(global_t)
+
+        # Progress bar
+        prog = global_t
+
+        # Text fade-in for newest line (first FADE_FRAMES frames)
+        if fade_in and i < FADE_FRAMES:
+            newest_alpha = min(1.0, _ease_in_out(i / max(FADE_FRAMES - 1, 1)))
+        else:
+            newest_alpha = 1.0
+
+        frame = _render_frame(
+            text_lines_visible=text_lines_visible,
+            all_lines=all_lines,
+            post_type=post_type,
+            bg_img=bg_img,
+            badge_text=badge_text,
+            highlight_color=highlight_color,
+            zoom=zoom,
+            newest_line_alpha=newest_alpha,
+            progress=prog,
+            bg_color=bg_color,
+        )
+        frames.append(frame)
+
+    return ImageSequenceClip(frames, fps=FPS)
 
 
 def _generate_voiceover_edge_tts(text: str, output_path: str) -> bool:
@@ -375,14 +397,13 @@ def generate_reel(
     text_duration = n_lines * seconds_per_line + hold_duration
     total_duration = max(text_duration, audio_duration) if audio_duration else text_duration
 
-    # ── Build static clips (one frame per segment, memory-safe) ──
+    # ── Build animated clips (Ken Burns + text fade-in) ──────────
     clips = []
     time_cursor = 0.0
 
     for i in range(1, n_lines + 1):
         duration = seconds_per_line if i < n_lines else hold_duration
-        progress = time_cursor / max(total_duration, 1)
-        clip = _make_static_clip(
+        clip = _make_animated_clip(
             text_lines_visible=lines[:i],
             all_lines=lines,
             post_type=post_type,
@@ -390,8 +411,10 @@ def generate_reel(
             badge_text=badge,
             highlight_color=highlight,
             duration=duration,
-            progress=progress,
+            time_start=time_cursor,
+            total_duration=total_duration,
             bg_color=bg_color,
+            fade_in=True,
         )
         clips.append(clip)
         time_cursor += duration
@@ -399,7 +422,7 @@ def generate_reel(
     # Hold final frame for remaining audio duration
     if audio_duration > time_cursor:
         remaining = audio_duration - time_cursor
-        clip = _make_static_clip(
+        clip = _make_animated_clip(
             text_lines_visible=lines,
             all_lines=lines,
             post_type=post_type,
@@ -407,8 +430,10 @@ def generate_reel(
             badge_text=badge,
             highlight_color=highlight,
             duration=remaining,
-            progress=1.0,
+            time_start=time_cursor,
+            total_duration=total_duration,
             bg_color=bg_color,
+            fade_in=False,
         )
         clips.append(clip)
 
