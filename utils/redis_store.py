@@ -135,6 +135,26 @@ def set_last_post_time():
         logger.warning(f"Redis set_last_post_time failed: {e}")
 
 
+# ─── Instagram Daily Counter (hard limit: 25 posts/24h) ──────────────────────
+
+def get_today_instagram_count() -> int:
+    try:
+        key = f"instagram_daily:{date.today()}"
+        val = get_redis().get(key)
+        return int(val) if val else 0
+    except Exception:
+        return 0
+
+
+def increment_today_instagram_count():
+    try:
+        key = f"instagram_daily:{date.today()}"
+        get_redis().incr(key)
+        get_redis().expire(key, 86400 * 2)
+    except Exception as e:
+        logger.warning(f"Redis instagram daily count failed: {e}")
+
+
 # ─── Twitter Monthly Counter ──────────────────────────────
 
 def get_monthly_twitter_count() -> int:

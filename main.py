@@ -272,7 +272,20 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
     else:
         logger.info("LinkedIn skipped — keys not configured yet")
 
-    # — Instagram —
+    # — Instagram — (hard limit: 25 posts per 24-hour rolling window)
+    INSTAGRAM_DAILY_LIMIT = 25
+    if cfg.instagram_access_token and cfg.instagram_business_account_id:
+        try:
+            from utils.redis_store import get_today_instagram_count, increment_today_instagram_count
+            insta_count = get_today_instagram_count()
+        except Exception:
+            insta_count = 0
+
+        if insta_count >= INSTAGRAM_DAILY_LIMIT:
+            logger.info(f"Instagram daily limit reached ({insta_count}/25). Skipping Instagram.")
+            results.append({"success": False, "platform": "instagram", "error": "daily limit reached"})
+            cfg.instagram_access_token = ""  # prevent the block below from running
+
     if cfg.instagram_access_token and cfg.instagram_business_account_id:
         caption = (post.instagram_caption + post.instagram_hashtags)[:2200]
         instagram = InstagramPublisher(
@@ -303,6 +316,8 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
                     image_urls=public_carousel_urls,
                 )
                 results.append(result)
+                if result.get("success"):
+                    increment_today_instagram_count()
                 logger.info(f"Instagram carousel: {'OK' if result['success'] else 'FAILED'}")
             except Exception as e:
                 logger.error(f"Instagram carousel error: {e}")
@@ -316,6 +331,8 @@ def run_post(post_type: str, cfg, dry_run: bool = False) -> None:
                     image_urls=[public_image_url],
                 )
                 results.append(result)
+                if result.get("success"):
+                    increment_today_instagram_count()
                 logger.info(f"Instagram image: {'OK' if result['success'] else 'FAILED'}")
             except Exception as e:
                 logger.error(f"Instagram image error: {e}")
