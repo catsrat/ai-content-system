@@ -390,7 +390,7 @@ def generate_post_image(
     if photo is None and background_image_url:
         photo = _download_image(background_image_url)
 
-    bg = _prepare_background(photo, theme["highlight"])
+    bg = _prepare_background(photo)
 
     slide = _render_slide(
         slide_text=headline,

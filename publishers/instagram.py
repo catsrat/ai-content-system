@@ -28,9 +28,9 @@ class InstagramPublisher:
         # Use token manager to get a valid long-lived token
         try:
             from utils.instagram_token_manager import get_valid_token
-            self.access_token = get_valid_token() or access_token
+            self.access_token = (get_valid_token() or access_token).strip()
         except Exception:
-            self.access_token = access_token
+            self.access_token = access_token.strip()
         self.account_id = business_account_id
 
     def _api_post(self, endpoint: str, params: dict) -> dict:

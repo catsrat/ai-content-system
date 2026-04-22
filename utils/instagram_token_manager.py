@@ -111,7 +111,7 @@ def get_valid_token() -> str:
     """
     app_id = os.environ.get("META_APP_ID", "")
     app_secret = os.environ.get("META_APP_SECRET", "")
-    env_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
+    env_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
 
     # 1. Check Redis
     stored_token, expiry = get_token_from_redis()
